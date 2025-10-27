@@ -67,23 +67,36 @@ const Dashboard = () => {
   const handleBuyNumber = async (service: string, country: string) => {
     try {
       toast.info("Purchasing number...");
-      // This will be implemented with edge functions
-      toast.error("API integration coming soon!");
+      
+      const { data, error } = await supabase.functions.invoke("sms-buy-number", {
+        body: { service, country },
+      });
+
+      if (error) throw error;
+
+      toast.success(`Number purchased: ${data.phone_number}`);
+      loadData();
     } catch (error) {
+      console.error("Error buying number:", error);
       toast.error("Failed to purchase number");
     }
   };
 
   const handleCancelActivation = async (id: string) => {
     try {
-      await supabase
-        .from("activations")
-        .update({ status: "cancelled" })
-        .eq("id", id);
-      
+      // Find activation
+      const activation = activations.find((a) => a.id === id);
+      if (!activation) return;
+
+      // Cancel via API
+      await supabase.functions.invoke("sms-cancel", {
+        body: { activation_id: activation.activation_id },
+      });
+
       toast.success("Activation cancelled");
       loadData();
     } catch (error) {
+      console.error("Error cancelling:", error);
       toast.error("Failed to cancel activation");
     }
   };

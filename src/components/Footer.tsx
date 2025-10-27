@@ -1,5 +1,5 @@
-import { Globe } from "lucide-react";
 import { Link } from "react-router-dom";
+import logo from "@/assets/logo.png";
 
 export const Footer = () => {
   return (
@@ -8,10 +8,7 @@ export const Footer = () => {
         <div className="grid gap-8 md:grid-cols-4">
           <div>
             <Link to="/" className="flex items-center gap-2 mb-4">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-secondary">
-                <Globe className="h-4 w-4 text-white" />
-              </div>
-              <span className="text-lg font-bold">SMSGlobe</span>
+              <img src={logo} alt="SMSGlobe" className="h-8" />
             </Link>
             <p className="text-sm text-muted-foreground">
               Instant virtual numbers for SMS verification. Fast, secure, and reliable.
