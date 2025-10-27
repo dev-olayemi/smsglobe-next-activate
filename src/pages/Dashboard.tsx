@@ -3,12 +3,15 @@ import { useNavigate } from "react-router-dom";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { BalanceCard } from "@/components/dashboard/BalanceCard";
-import { ServicePicker } from "@/components/dashboard/ServicePicker";
+import { DynamicServicePicker } from "@/components/dashboard/DynamicServicePicker";
 import { ActiveActivations } from "@/components/dashboard/ActiveActivations";
 import { auth } from "@/lib/auth";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Loader2 } from "lucide-react";
+import { Loader2, History, Key } from "lucide-react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -64,21 +67,50 @@ const Dashboard = () => {
     }
   };
 
-  const handleBuyNumber = async (service: string, country: string) => {
+  const handleBuyNumber = async (service: string, country: string, price: number) => {
     try {
+      // Check if user has sufficient balance
+      if (balance < price) {
+        toast.error(
+          `Insufficient balance. You need $${price.toFixed(2)} but have $${balance.toFixed(2)}`,
+          {
+            action: {
+              label: "Top Up",
+              onClick: () => toast.info("Top up feature coming soon!"),
+            },
+          }
+        );
+        return;
+      }
+
       toast.info("Purchasing number...");
       
       const { data, error } = await supabase.functions.invoke("sms-buy-number", {
         body: { service, country },
       });
 
-      if (error) throw error;
+      if (error) {
+        // Handle specific API errors
+        if (error.message === "NO_BALANCE") {
+          toast.error(
+            "Your SMS-Activate API account has insufficient balance. Please top up your SMS-Activate account.",
+            {
+              duration: 6000,
+            }
+          );
+        } else if (error.message.includes("NO_NUMBERS")) {
+          toast.error("No numbers available for this service/country combination. Please try another country.");
+        } else {
+          toast.error(`Failed to purchase: ${error.message}`);
+        }
+        return;
+      }
 
       toast.success(`Number purchased: ${data.phone_number}`);
       loadData();
     } catch (error) {
       console.error("Error buying number:", error);
-      toast.error("Failed to purchase number");
+      toast.error("Failed to purchase number. Please try again.");
     }
   };
 
@@ -120,18 +152,71 @@ const Dashboard = () => {
           </p>
         </div>
 
-        <div className="grid gap-6 md:grid-cols-3 mb-8">
-          <BalanceCard balance={balance} cashback={cashback} />
-          <div className="md:col-span-2">
-            <ServicePicker onBuyNumber={handleBuyNumber} />
-          </div>
-        </div>
+        <Tabs defaultValue="buy" className="space-y-6">
+          <TabsList className="grid w-full max-w-md grid-cols-3">
+            <TabsTrigger value="buy">Buy Number</TabsTrigger>
+            <TabsTrigger value="active">Active ({activations.length})</TabsTrigger>
+            <TabsTrigger value="history">History</TabsTrigger>
+          </TabsList>
 
-        <ActiveActivations
-          activations={activations}
-          onCancel={handleCancelActivation}
-          onRefresh={loadData}
-        />
+          <TabsContent value="buy" className="space-y-6">
+            <div className="grid gap-6 md:grid-cols-3">
+              <BalanceCard balance={balance} cashback={cashback} />
+              <Card className="md:col-span-2">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Key className="h-5 w-5" />
+                    Quick Stats
+                  </CardTitle>
+                  <CardDescription>Your account overview</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-3 gap-4">
+                    <div className="space-y-1">
+                      <p className="text-sm text-muted-foreground">Total Spent</p>
+                      <p className="text-2xl font-bold">$0.00</p>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-sm text-muted-foreground">Active Numbers</p>
+                      <p className="text-2xl font-bold">{activations.length}</p>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-sm text-muted-foreground">Success Rate</p>
+                      <p className="text-2xl font-bold">100%</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            <DynamicServicePicker onBuyNumber={handleBuyNumber} />
+          </TabsContent>
+
+          <TabsContent value="active">
+            <ActiveActivations
+              activations={activations}
+              onCancel={handleCancelActivation}
+              onRefresh={loadData}
+            />
+          </TabsContent>
+
+          <TabsContent value="history">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <History className="h-5 w-5" />
+                  Transaction History
+                </CardTitle>
+                <CardDescription>View your past activations and transactions</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="text-center py-8 text-muted-foreground">
+                  No transaction history yet. Buy your first number to get started!
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
       </main>
       <Footer />
     </div>
