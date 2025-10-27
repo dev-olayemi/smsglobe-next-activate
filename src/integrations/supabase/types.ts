@@ -14,7 +14,126 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      activations: {
+        Row: {
+          activation_id: string
+          can_get_another_sms: boolean | null
+          country_code: number
+          country_name: string
+          created_at: string | null
+          expires_at: string | null
+          id: string
+          operator: string | null
+          phone_number: string
+          price: number
+          service: string
+          sms_code: string | null
+          sms_text: string | null
+          status: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          activation_id: string
+          can_get_another_sms?: boolean | null
+          country_code: number
+          country_name: string
+          created_at?: string | null
+          expires_at?: string | null
+          id?: string
+          operator?: string | null
+          phone_number: string
+          price: number
+          service: string
+          sms_code?: string | null
+          sms_text?: string | null
+          status?: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          activation_id?: string
+          can_get_another_sms?: boolean | null
+          country_code?: number
+          country_name?: string
+          created_at?: string | null
+          expires_at?: string | null
+          id?: string
+          operator?: string | null
+          phone_number?: string
+          price?: number
+          service?: string
+          sms_code?: string | null
+          sms_text?: string | null
+          status?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      balance_transactions: {
+        Row: {
+          amount: number
+          balance_after: number
+          created_at: string | null
+          description: string | null
+          id: string
+          type: string
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          balance_after: number
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          type: string
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          balance_after?: number
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          type?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          api_key: string | null
+          balance: number | null
+          cashback: number | null
+          created_at: string | null
+          email: string
+          id: string
+          updated_at: string | null
+          use_cashback_first: boolean | null
+        }
+        Insert: {
+          api_key?: string | null
+          balance?: number | null
+          cashback?: number | null
+          created_at?: string | null
+          email: string
+          id: string
+          updated_at?: string | null
+          use_cashback_first?: boolean | null
+        }
+        Update: {
+          api_key?: string | null
+          balance?: number | null
+          cashback?: number | null
+          created_at?: string | null
+          email?: string
+          id?: string
+          updated_at?: string | null
+          use_cashback_first?: boolean | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
