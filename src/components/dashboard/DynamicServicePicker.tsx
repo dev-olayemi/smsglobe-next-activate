@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Loader2, Search } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
-import { getServiceIcon, getCountryFlag } from "@/lib/service-icons";
+import { getServiceLogo, getCountryData } from "@/lib/service-data";
 import { toast } from "sonner";
 
 interface Service {
@@ -22,10 +22,11 @@ interface Country {
 }
 
 interface DynamicServicePickerProps {
-  onBuyNumber: (service: string, country: string, price: number) => Promise<void>;
+  onBuyNumber: (service: string, country: string, price: number, type: string, days?: number) => Promise<void>;
+  activationType: string;
 }
 
-export const DynamicServicePicker = ({ onBuyNumber }: DynamicServicePickerProps) => {
+export const DynamicServicePicker = ({ onBuyNumber, activationType }: DynamicServicePickerProps) => {
   const [services, setServices] = useState<Service[]>([]);
   const [countries, setCountries] = useState<Country[]>([]);
   const [service, setService] = useState("");
@@ -34,6 +35,7 @@ export const DynamicServicePicker = ({ onBuyNumber }: DynamicServicePickerProps)
   const [loadingCountries, setLoadingCountries] = useState(false);
   const [searchService, setSearchService] = useState("");
   const [searchCountry, setSearchCountry] = useState("");
+  const [rentalDays, setRentalDays] = useState("7");
 
   useEffect(() => {
     loadServices();
@@ -78,11 +80,18 @@ export const DynamicServicePicker = ({ onBuyNumber }: DynamicServicePickerProps)
     if (!service || !country) return;
     
     const selectedCountry = countries.find((c) => c.code.toString() === country);
-    const price = selectedCountry?.price || 0;
+    let price = selectedCountry?.price || 0;
+    
+    // Adjust price based on type
+    if (activationType === "rental") {
+      price = price * parseInt(rentalDays) * 5; // Example: 5x daily rate
+    } else if (activationType === "voice") {
+      price = price * 1.5; // 50% more for voice
+    }
     
     setLoading(true);
     try {
-      await onBuyNumber(service, country, price);
+      await onBuyNumber(service, country, price, activationType, activationType === "rental" ? parseInt(rentalDays) : undefined);
     } finally {
       setLoading(false);
     }
@@ -97,21 +106,15 @@ export const DynamicServicePicker = ({ onBuyNumber }: DynamicServicePickerProps)
   );
 
   const selectedCountry = countries.find((c) => c.code.toString() === country);
-  const ServiceIcon = service ? getServiceIcon(service) : null;
+  const selectedService = services.find((s) => s.code === service);
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Get a Virtual Number</CardTitle>
-        <CardDescription>
-          Select a service and country to receive SMS verification codes
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
+    <div className="space-y-6">
+      <div className="space-y-4">
         <div className="space-y-2">
-          <Label htmlFor="service">Service</Label>
+          <Label htmlFor="service">Select Service</Label>
           <div className="relative">
-            <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+            <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground z-10" />
             <Input
               placeholder="Search services..."
               value={searchService}
@@ -120,43 +123,48 @@ export const DynamicServicePicker = ({ onBuyNumber }: DynamicServicePickerProps)
             />
           </div>
           <Select value={service} onValueChange={setService}>
-            <SelectTrigger id="service">
-              <SelectValue placeholder="Select a service">
-                {service && (
-                  <div className="flex items-center gap-2">
-                    {ServiceIcon && <ServiceIcon className="h-4 w-4" />}
-                    <span>{services.find((s) => s.code === service)?.name}</span>
+            <SelectTrigger id="service" className="h-12">
+              <SelectValue placeholder="Choose a service">
+                {service && selectedService && (
+                  <div className="flex items-center gap-3">
+                    <img 
+                      src={getServiceLogo(service)} 
+                      alt={selectedService.name}
+                      className="h-6 w-6 object-contain"
+                    />
+                    <span className="font-medium">{selectedService.name}</span>
                   </div>
                 )}
               </SelectValue>
             </SelectTrigger>
-            <SelectContent className="max-h-[300px]">
-              {filteredServices.map((s) => {
-                const Icon = getServiceIcon(s.code);
-                return (
-                  <SelectItem key={s.code} value={s.code}>
-                    <div className="flex items-center gap-2">
-                      <Icon className="h-4 w-4" />
-                      <span>{s.name}</span>
-                    </div>
-                  </SelectItem>
-                );
-              })}
+            <SelectContent className="max-h-[300px] bg-background border shadow-lg z-50">
+              {filteredServices.map((s) => (
+                <SelectItem key={s.code} value={s.code} className="cursor-pointer">
+                  <div className="flex items-center gap-3 py-1">
+                    <img 
+                      src={getServiceLogo(s.code)} 
+                      alt={s.name}
+                      className="h-6 w-6 object-contain"
+                    />
+                    <span>{s.name}</span>
+                  </div>
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
 
         {service && (
           <div className="space-y-2">
-            <Label htmlFor="country">Country</Label>
+            <Label htmlFor="country">Select Country</Label>
             {loadingCountries ? (
-              <div className="flex items-center justify-center py-4">
+              <div className="flex items-center justify-center py-8">
                 <Loader2 className="h-6 w-6 animate-spin text-primary" />
               </div>
             ) : (
               <>
                 <div className="relative">
-                  <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                  <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground z-10" />
                   <Input
                     placeholder="Search countries..."
                     value={searchCountry}
@@ -165,12 +173,16 @@ export const DynamicServicePicker = ({ onBuyNumber }: DynamicServicePickerProps)
                   />
                 </div>
                 <Select value={country} onValueChange={setCountry}>
-                  <SelectTrigger id="country">
-                    <SelectValue placeholder="Select a country">
+                  <SelectTrigger id="country" className="h-12">
+                    <SelectValue placeholder="Choose a country">
                       {country && selectedCountry && (
-                        <div className="flex items-center gap-2">
-                          <span className="text-lg">{getCountryFlag(country)}</span>
-                          <span>{selectedCountry.name}</span>
+                        <div className="flex items-center gap-3">
+                          <img 
+                            src={getCountryData(country).flag}
+                            alt={selectedCountry.name}
+                            className="h-6 w-8 object-cover rounded"
+                          />
+                          <span className="font-medium">{selectedCountry.name}</span>
                           <span className="ml-auto text-sm text-muted-foreground">
                             ${selectedCountry.price.toFixed(2)}
                           </span>
@@ -178,11 +190,15 @@ export const DynamicServicePicker = ({ onBuyNumber }: DynamicServicePickerProps)
                       )}
                     </SelectValue>
                   </SelectTrigger>
-                  <SelectContent className="max-h-[300px]">
+                  <SelectContent className="max-h-[300px] bg-background border shadow-lg z-50">
                     {filteredCountries.map((c) => (
-                      <SelectItem key={c.code} value={c.code.toString()}>
-                        <div className="flex items-center gap-2 w-full">
-                          <span className="text-lg">{getCountryFlag(c.code.toString())}</span>
+                      <SelectItem key={c.code} value={c.code.toString()} className="cursor-pointer">
+                        <div className="flex items-center gap-3 w-full py-1">
+                          <img 
+                            src={getCountryData(c.code.toString()).flag}
+                            alt={c.name}
+                            className="h-6 w-8 object-cover rounded"
+                          />
                           <span className="flex-1">{c.name}</span>
                           <span className="text-sm text-muted-foreground">
                             {c.count} available
@@ -200,16 +216,40 @@ export const DynamicServicePicker = ({ onBuyNumber }: DynamicServicePickerProps)
           </div>
         )}
 
+        {activationType === "rental" && selectedCountry && (
+          <div className="space-y-2">
+            <Label htmlFor="rental-days">Rental Period</Label>
+            <Select value={rentalDays} onValueChange={setRentalDays}>
+              <SelectTrigger id="rental-days">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent className="bg-background border shadow-lg z-50">
+                <SelectItem value="7">7 days - ${(selectedCountry.price * 7 * 5).toFixed(2)}</SelectItem>
+                <SelectItem value="14">14 days - ${(selectedCountry.price * 14 * 5).toFixed(2)}</SelectItem>
+                <SelectItem value="30">30 days - ${(selectedCountry.price * 30 * 5).toFixed(2)}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+
         {selectedCountry && (
-          <div className="rounded-lg border bg-muted/50 p-4 space-y-2">
+          <div className="rounded-lg border bg-gradient-to-r from-primary/5 to-secondary/5 p-4 space-y-3">
             <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">Available numbers:</span>
-              <span className="font-medium">{selectedCountry.count}</span>
+              <span className="text-muted-foreground">Type:</span>
+              <span className="font-medium capitalize">{activationType}</span>
             </div>
             <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">Price per number:</span>
-              <span className="font-medium text-primary">
-                ${selectedCountry.price.toFixed(2)}
+              <span className="text-muted-foreground">Available:</span>
+              <span className="font-medium">{selectedCountry.count} numbers</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">Total Price:</span>
+              <span className="text-2xl font-bold text-primary">
+                ${activationType === "rental" 
+                  ? (selectedCountry.price * parseInt(rentalDays) * 5).toFixed(2)
+                  : activationType === "voice"
+                  ? (selectedCountry.price * 1.5).toFixed(2)
+                  : selectedCountry.price.toFixed(2)}
               </span>
             </div>
           </div>
@@ -218,14 +258,13 @@ export const DynamicServicePicker = ({ onBuyNumber }: DynamicServicePickerProps)
         <Button
           onClick={handleBuy}
           className="w-full"
+          size="lg"
           disabled={!service || !country || loading || loadingCountries}
         >
           {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          {selectedCountry
-            ? `Buy Number - $${selectedCountry.price.toFixed(2)}`
-            : "Buy Number Now"}
+          {selectedCountry ? "Get Number Now" : "Select Service & Country"}
         </Button>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 };

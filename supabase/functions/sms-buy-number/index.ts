@@ -30,7 +30,7 @@ serve(async (req) => {
       throw new Error("Unauthorized");
     }
 
-    const { service, country, operator } = await req.json();
+    const { service, country, type, rental_days: days, operator } = await req.json();
     const API_KEY = Deno.env.get("SMS_ACTIVATE_API_KEY");
     const BASE_URL = "https://api.sms-activate.ae/stubs/handler_api.php";
 
@@ -40,12 +40,12 @@ serve(async (req) => {
     }
 
     const response = await fetch(url);
-    const data = await response.text();
+    const responseData = await response.text();
 
-    console.log("Buy number response:", data);
+    console.log("Buy number response:", responseData);
 
-    if (data.startsWith("ACCESS_NUMBER")) {
-      const parts = data.split(":");
+    if (responseData.startsWith("ACCESS_NUMBER")) {
+      const parts = responseData.split(":");
       const activationId = parts[1];
       const phoneNumber = parts[2];
 
@@ -60,6 +60,9 @@ serve(async (req) => {
           country_code: parseInt(country),
           country_name: getCountryName(parseInt(country)),
           operator: operator || null,
+          activation_type: type || "standard",
+          rental_days: days || null,
+          is_voice: type === "voice",
           price: 0.5, // This should come from price info
           status: "waiting",
           expires_at: new Date(Date.now() + 20 * 60 * 1000).toISOString(), // 20 minutes
@@ -78,7 +81,7 @@ serve(async (req) => {
         }
       );
     } else {
-      throw new Error(data);
+      throw new Error(responseData);
     }
   } catch (error) {
     console.error("Error:", error);

@@ -3,16 +3,19 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Copy, X, RefreshCw, Clock } from "lucide-react";
 import { toast } from "sonner";
-import { getServiceIcon, getCountryFlag } from "@/lib/service-icons";
+import { getServiceLogo, getCountryData } from "@/lib/service-data";
 
 interface Activation {
   id: string;
   phone_number: string;
   service: string;
   country_code: number;
+  activation_type: string;
   status: string;
   sms_code?: string;
   created_at: string;
+  rental_days?: number;
+  is_voice?: boolean;
 }
 
 interface ActiveActivationsProps {
@@ -30,11 +33,11 @@ export const ActiveActivations = ({ activations, onCancel, onRefresh }: ActiveAc
   const getStatusColor = (status: string) => {
     switch (status) {
       case "waiting":
-        return "bg-yellow-500";
+        return "bg-yellow-500/20 text-yellow-700 dark:text-yellow-300";
       case "completed":
-        return "bg-success";
+        return "bg-success/20 text-success";
       case "cancelled":
-        return "bg-destructive";
+        return "bg-destructive/20 text-destructive";
       default:
         return "bg-muted";
     }
@@ -78,59 +81,81 @@ export const ActiveActivations = ({ activations, onCancel, onRefresh }: ActiveAc
         ) : (
           <div className="space-y-4">
             {activations.map((activation) => {
-              const ServiceIcon = getServiceIcon(activation.service);
-              const flag = getCountryFlag(activation.country_code.toString());
+              const countryInfo = getCountryData(activation.country_code.toString());
               
               return (
                 <div
                   key={activation.id}
-                  className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors"
+                  className="group relative flex items-center gap-4 p-5 border-2 rounded-xl hover:border-primary/50 hover:shadow-lg transition-all bg-card"
                 >
+                  {/* Service & Country Icons */}
+                  <div className="flex items-center gap-2">
+                    <img 
+                      src={getServiceLogo(activation.service)}
+                      alt={activation.service}
+                      className="h-10 w-10 object-contain"
+                    />
+                    <img 
+                      src={countryInfo.flag}
+                      alt={countryInfo.name}
+                      className="h-8 w-10 object-cover rounded shadow-sm"
+                    />
+                  </div>
+
                   <div className="space-y-2 flex-1">
                     <div className="flex items-center gap-3">
-                      <div className="flex items-center gap-2">
-                        <ServiceIcon className="h-5 w-5 text-primary" />
-                        <span className="text-lg">{flag}</span>
-                      </div>
-                      <span className="font-mono font-semibold text-lg">{activation.phone_number}</span>
+                      <span className="font-mono font-bold text-lg">{activation.phone_number}</span>
                       <Button
                         variant="ghost"
                         size="sm"
                         onClick={() => copyToClipboard(activation.phone_number)}
+                        className="opacity-0 group-hover:opacity-100 transition-opacity"
                       >
                         <Copy className="h-4 w-4" />
                       </Button>
                     </div>
-                    <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                      <span className="capitalize">{activation.service}</span>
-                      <span>•</span>
+                    
+                    <div className="flex items-center gap-3 text-sm">
                       <Badge variant="outline" className={getStatusColor(activation.status)}>
                         {activation.status}
                       </Badge>
-                      <span>•</span>
-                      <span>{formatTimeAgo(activation.created_at)}</span>
+                      {activation.activation_type && activation.activation_type !== "standard" && (
+                        <Badge variant="secondary">
+                          {activation.activation_type}
+                          {activation.rental_days && ` - ${activation.rental_days}d`}
+                        </Badge>
+                      )}
+                      {activation.is_voice && (
+                        <Badge variant="secondary">Voice</Badge>
+                      )}
+                      <span className="text-muted-foreground">{formatTimeAgo(activation.created_at)}</span>
                     </div>
+                    
                     {activation.sms_code && (
-                      <div className="flex items-center gap-2 mt-3 p-3 bg-success/10 border border-success/20 rounded-lg">
-                        <span className="text-sm font-medium text-success">Verification Code:</span>
-                        <code className="bg-background px-3 py-1 rounded text-lg font-bold">
-                          {activation.sms_code}
-                        </code>
+                      <div className="flex items-center gap-3 mt-3 p-4 bg-success/10 border-2 border-success/20 rounded-lg">
+                        <div className="flex-1">
+                          <p className="text-xs text-success font-medium mb-1">VERIFICATION CODE</p>
+                          <code className="text-2xl font-bold tracking-wider">
+                            {activation.sms_code}
+                          </code>
+                        </div>
                         <Button
-                          variant="ghost"
-                          size="sm"
+                          variant="outline"
+                          size="lg"
                           onClick={() => copyToClipboard(activation.sms_code!)}
+                          className="border-success/50 hover:bg-success/10"
                         >
-                          <Copy className="h-4 w-4" />
+                          <Copy className="h-5 w-5" />
                         </Button>
                       </div>
                     )}
                   </div>
+                  
                   <Button
                     variant="ghost"
                     size="sm"
                     onClick={() => onCancel(activation.id)}
-                    className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                    className="text-destructive hover:text-destructive hover:bg-destructive/10 absolute top-3 right-3"
                   >
                     <X className="h-5 w-5" />
                   </Button>

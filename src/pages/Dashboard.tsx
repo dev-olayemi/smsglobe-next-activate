@@ -4,6 +4,8 @@ import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { BalanceCard } from "@/components/dashboard/BalanceCard";
 import { DynamicServicePicker } from "@/components/dashboard/DynamicServicePicker";
+import { FeatureSelector } from "@/components/dashboard/FeatureSelector";
+import { TopUpModal } from "@/components/dashboard/TopUpModal";
 import { ActiveActivations } from "@/components/dashboard/ActiveActivations";
 import { auth } from "@/lib/auth";
 import { supabase } from "@/integrations/supabase/client";
@@ -19,6 +21,8 @@ const Dashboard = () => {
   const [balance, setBalance] = useState(0);
   const [cashback, setCashback] = useState(0);
   const [activations, setActivations] = useState<any[]>([]);
+  const [showTopUp, setShowTopUp] = useState(false);
+  const [activationType, setActivationType] = useState("activation");
 
   useEffect(() => {
     checkAuth();
@@ -67,7 +71,7 @@ const Dashboard = () => {
     }
   };
 
-  const handleBuyNumber = async (service: string, country: string, price: number) => {
+  const handleBuyNumber = async (service: string, country: string, price: number, type: string, days?: number) => {
     try {
       // Check if user has sufficient balance
       if (balance < price) {
@@ -76,7 +80,7 @@ const Dashboard = () => {
           {
             action: {
               label: "Top Up",
-              onClick: () => toast.info("Top up feature coming soon!"),
+              onClick: () => setShowTopUp(true),
             },
           }
         );
@@ -86,14 +90,14 @@ const Dashboard = () => {
       toast.info("Purchasing number...");
       
       const { data, error } = await supabase.functions.invoke("sms-buy-number", {
-        body: { service, country },
+        body: { service, country, type, rental_days: days },
       });
 
       if (error) {
         // Handle specific API errors
         if (error.message === "NO_BALANCE") {
           toast.error(
-            "Your SMS-Activate API account has insufficient balance. Please top up your SMS-Activate account.",
+            "Platform balance is low. Please contact support or try again later.",
             {
               duration: 6000,
             }
@@ -104,6 +108,15 @@ const Dashboard = () => {
           toast.error(`Failed to purchase: ${error.message}`);
         }
         return;
+      }
+
+      // Deduct from user balance
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        await supabase
+          .from("profiles")
+          .update({ balance: balance - price })
+          .eq("id", user.id);
       }
 
       toast.success(`Number purchased: ${data.phone_number}`);
@@ -161,7 +174,7 @@ const Dashboard = () => {
 
           <TabsContent value="buy" className="space-y-6">
             <div className="grid gap-6 md:grid-cols-3">
-              <BalanceCard balance={balance} cashback={cashback} />
+              <BalanceCard balance={balance} cashback={cashback} onTopUp={() => setShowTopUp(true)} />
               <Card className="md:col-span-2">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
@@ -189,7 +202,15 @@ const Dashboard = () => {
               </Card>
             </div>
 
-            <DynamicServicePicker onBuyNumber={handleBuyNumber} />
+            <FeatureSelector
+              selectedFeature={activationType}
+              onFeatureChange={setActivationType}
+            >
+              <DynamicServicePicker 
+                onBuyNumber={handleBuyNumber}
+                activationType={activationType}
+              />
+            </FeatureSelector>
           </TabsContent>
 
           <TabsContent value="active">
@@ -219,6 +240,12 @@ const Dashboard = () => {
         </Tabs>
       </main>
       <Footer />
+      
+      <TopUpModal
+        open={showTopUp}
+        onOpenChange={setShowTopUp}
+        onSuccess={loadData}
+      />
     </div>
   );
 };

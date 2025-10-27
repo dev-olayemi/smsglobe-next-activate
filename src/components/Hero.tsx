@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { ArrowRight, Globe, Shield, Zap } from "lucide-react";
 import { Link } from "react-router-dom";
+import logo from "@/assets/logo.png";
 
 export const Hero = () => {
   return (
@@ -11,6 +12,11 @@ export const Hero = () => {
       
       <div className="container relative">
         <div className="mx-auto max-w-4xl text-center">
+          {/* Logo */}
+          <div className="mb-8 flex justify-center">
+            <img src={logo} alt="SMSGlobe" className="h-24 md:h-32 drop-shadow-2xl" />
+          </div>
+
           {/* Badge */}
           <div className="mb-8 inline-flex items-center gap-2 rounded-full border border-border bg-card px-4 py-1.5 text-sm shadow-sm">
             <div className="h-2 w-2 rounded-full bg-success animate-pulse" />

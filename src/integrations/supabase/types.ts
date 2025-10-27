@@ -17,15 +17,19 @@ export type Database = {
       activations: {
         Row: {
           activation_id: string
+          activation_type: string | null
           can_get_another_sms: boolean | null
           country_code: number
           country_name: string
           created_at: string | null
           expires_at: string | null
           id: string
+          is_voice: boolean | null
           operator: string | null
           phone_number: string
           price: number
+          rental_days: number | null
+          rental_expires_at: string | null
           service: string
           sms_code: string | null
           sms_text: string | null
@@ -35,15 +39,19 @@ export type Database = {
         }
         Insert: {
           activation_id: string
+          activation_type?: string | null
           can_get_another_sms?: boolean | null
           country_code: number
           country_name: string
           created_at?: string | null
           expires_at?: string | null
           id?: string
+          is_voice?: boolean | null
           operator?: string | null
           phone_number: string
           price: number
+          rental_days?: number | null
+          rental_expires_at?: string | null
           service: string
           sms_code?: string | null
           sms_text?: string | null
@@ -53,15 +61,19 @@ export type Database = {
         }
         Update: {
           activation_id?: string
+          activation_type?: string | null
           can_get_another_sms?: boolean | null
           country_code?: number
           country_name?: string
           created_at?: string | null
           expires_at?: string | null
           id?: string
+          is_voice?: boolean | null
           operator?: string | null
           phone_number?: string
           price?: number
+          rental_days?: number | null
+          rental_expires_at?: string | null
           service?: string
           sms_code?: string | null
           sms_text?: string | null
@@ -98,6 +110,63 @@ export type Database = {
           id?: string
           type?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      deposits: {
+        Row: {
+          amount: number
+          completed_at: string | null
+          created_at: string | null
+          id: string
+          payment_method: string
+          status: string
+          transaction_id: string | null
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          completed_at?: string | null
+          created_at?: string | null
+          id?: string
+          payment_method: string
+          status?: string
+          transaction_id?: string | null
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          completed_at?: string | null
+          created_at?: string | null
+          id?: string
+          payment_method?: string
+          status?: string
+          transaction_id?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      payment_methods: {
+        Row: {
+          code: string
+          created_at: string | null
+          enabled: boolean | null
+          id: string
+          name: string
+        }
+        Insert: {
+          code: string
+          created_at?: string | null
+          enabled?: boolean | null
+          id?: string
+          name: string
+        }
+        Update: {
+          code?: string
+          created_at?: string | null
+          enabled?: boolean | null
+          id?: string
+          name?: string
         }
         Relationships: []
       }
