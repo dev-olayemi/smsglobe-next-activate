@@ -51,6 +51,12 @@ export const Header = () => {
               <Button variant="ghost" asChild>
                 <Link to="/dashboard">Dashboard</Link>
               </Button>
+              <Button variant="ghost" asChild>
+                <Link to="/transactions">Transactions</Link>
+              </Button>
+              <Button variant="ghost" asChild>
+                <Link to="/profile">Profile</Link>
+              </Button>
               <Button variant="outline" onClick={handleLogout}>
                 Logout
               </Button>

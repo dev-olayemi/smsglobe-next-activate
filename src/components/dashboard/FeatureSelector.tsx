@@ -1,6 +1,5 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Phone, Calendar, Mic, MessageSquareMore } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface Feature {
   id: string;
@@ -49,32 +48,51 @@ export const FeatureSelector = ({ selectedFeature, onFeatureChange, children }: 
   ];
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Select Service Type</CardTitle>
-        <CardDescription>Choose how you want to receive verification</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <Tabs value={selectedFeature} onValueChange={onFeatureChange} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-2 lg:grid-cols-4">
-            {features.map((feature) => (
-              <TabsTrigger
-                key={feature.id}
-                value={feature.id}
-                disabled={!feature.available}
-                className="flex flex-col gap-1 h-auto py-3"
-              >
-                <feature.icon className="h-5 w-5" />
-                <span className="text-xs font-medium">{feature.name}</span>
-              </TabsTrigger>
-            ))}
-          </TabsList>
+    <div className="space-y-6">
+      <div>
+        <h3 className="text-lg font-semibold mb-2">Select Service Type</h3>
+        <p className="text-sm text-muted-foreground">Choose how you want to receive verification</p>
+      </div>
 
-          <TabsContent value={selectedFeature} className="space-y-4 mt-6">
-            {children}
-          </TabsContent>
-        </Tabs>
-      </CardContent>
-    </Card>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {features.map((feature) => (
+          <button
+            key={feature.id}
+            onClick={() => feature.available && onFeatureChange(feature.id)}
+            disabled={!feature.available}
+            className={cn(
+              "relative p-6 rounded-xl border-2 transition-all duration-200",
+              "hover:shadow-lg hover:-translate-y-1",
+              "disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-none",
+              selectedFeature === feature.id
+                ? "border-primary bg-primary/5 shadow-md"
+                : "border-border bg-card hover:border-primary/50"
+            )}
+          >
+            <div className="flex flex-col items-center text-center space-y-3">
+              <div className={cn(
+                "p-3 rounded-lg",
+                selectedFeature === feature.id 
+                  ? "bg-primary text-primary-foreground" 
+                  : "bg-muted text-muted-foreground"
+              )}>
+                <feature.icon className="h-6 w-6" />
+              </div>
+              <div>
+                <p className="font-semibold text-sm mb-1">{feature.name}</p>
+                <p className="text-xs text-muted-foreground">{feature.description}</p>
+              </div>
+            </div>
+            {selectedFeature === feature.id && (
+              <div className="absolute top-2 right-2 h-2 w-2 rounded-full bg-primary animate-pulse" />
+            )}
+          </button>
+        ))}
+      </div>
+
+      <div className="mt-8">
+        {children}
+      </div>
+    </div>
   );
 };

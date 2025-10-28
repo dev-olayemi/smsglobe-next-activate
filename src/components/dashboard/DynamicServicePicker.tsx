@@ -80,18 +80,21 @@ export const DynamicServicePicker = ({ onBuyNumber, activationType }: DynamicSer
     if (!service || !country) return;
     
     const selectedCountry = countries.find((c) => c.code.toString() === country);
-    let price = selectedCountry?.price || 0;
+    let basePrice = selectedCountry?.price || 0;
     
-    // Adjust price based on type
+    // Adjust base price based on type
     if (activationType === "rental") {
-      price = price * parseInt(rentalDays) * 5; // Example: 5x daily rate
+      basePrice = basePrice * parseInt(rentalDays) * 5; // Example: 5x daily rate
     } else if (activationType === "voice") {
-      price = price * 1.5; // 50% more for voice
+      basePrice = basePrice * 1.5; // 50% more for voice
     }
+    
+    // Apply 15% markup for profit
+    const finalPrice = Number((basePrice * 1.15).toFixed(2));
     
     setLoading(true);
     try {
-      await onBuyNumber(service, country, price, activationType, activationType === "rental" ? parseInt(rentalDays) : undefined);
+      await onBuyNumber(service, country, finalPrice, activationType, activationType === "rental" ? parseInt(rentalDays) : undefined);
     } finally {
       setLoading(false);
     }
@@ -184,7 +187,7 @@ export const DynamicServicePicker = ({ onBuyNumber, activationType }: DynamicSer
                           />
                           <span className="font-medium">{selectedCountry.name}</span>
                           <span className="ml-auto text-sm text-muted-foreground">
-                            ${selectedCountry.price.toFixed(2)}
+                            ${(selectedCountry.price * 1.15).toFixed(2)}
                           </span>
                         </div>
                       )}
@@ -204,7 +207,7 @@ export const DynamicServicePicker = ({ onBuyNumber, activationType }: DynamicSer
                             {c.count} available
                           </span>
                           <span className="text-sm font-medium">
-                            ${c.price.toFixed(2)}
+                            ${(c.price * 1.15).toFixed(2)}
                           </span>
                         </div>
                       </SelectItem>
@@ -224,9 +227,9 @@ export const DynamicServicePicker = ({ onBuyNumber, activationType }: DynamicSer
                 <SelectValue />
               </SelectTrigger>
               <SelectContent className="bg-background border shadow-lg z-50">
-                <SelectItem value="7">7 days - ${(selectedCountry.price * 7 * 5).toFixed(2)}</SelectItem>
-                <SelectItem value="14">14 days - ${(selectedCountry.price * 14 * 5).toFixed(2)}</SelectItem>
-                <SelectItem value="30">30 days - ${(selectedCountry.price * 30 * 5).toFixed(2)}</SelectItem>
+                <SelectItem value="7">7 days - ${(selectedCountry.price * 7 * 5 * 1.15).toFixed(2)}</SelectItem>
+                <SelectItem value="14">14 days - ${(selectedCountry.price * 14 * 5 * 1.15).toFixed(2)}</SelectItem>
+                <SelectItem value="30">30 days - ${(selectedCountry.price * 30 * 5 * 1.15).toFixed(2)}</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -246,10 +249,10 @@ export const DynamicServicePicker = ({ onBuyNumber, activationType }: DynamicSer
               <span className="text-sm text-muted-foreground">Total Price:</span>
               <span className="text-2xl font-bold text-primary">
                 ${activationType === "rental" 
-                  ? (selectedCountry.price * parseInt(rentalDays) * 5).toFixed(2)
+                  ? (selectedCountry.price * parseInt(rentalDays) * 5 * 1.15).toFixed(2)
                   : activationType === "voice"
-                  ? (selectedCountry.price * 1.5).toFixed(2)
-                  : selectedCountry.price.toFixed(2)}
+                  ? (selectedCountry.price * 1.5 * 1.15).toFixed(2)
+                  : (selectedCountry.price * 1.15).toFixed(2)}
               </span>
             </div>
           </div>

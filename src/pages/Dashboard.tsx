@@ -202,15 +202,19 @@ const Dashboard = () => {
               </Card>
             </div>
 
-            <FeatureSelector
-              selectedFeature={activationType}
-              onFeatureChange={setActivationType}
-            >
-              <DynamicServicePicker 
-                onBuyNumber={handleBuyNumber}
-                activationType={activationType}
-              />
-            </FeatureSelector>
+            <Card>
+              <CardContent className="pt-6">
+                <FeatureSelector
+                  selectedFeature={activationType}
+                  onFeatureChange={setActivationType}
+                >
+                  <DynamicServicePicker 
+                    onBuyNumber={handleBuyNumber}
+                    activationType={activationType}
+                  />
+                </FeatureSelector>
+              </CardContent>
+            </Card>
           </TabsContent>
 
           <TabsContent value="active">

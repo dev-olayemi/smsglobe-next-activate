@@ -40,39 +40,32 @@ export const TopUpModal = ({ open, onOpenChange, onSuccess }: TopUpModalProps) =
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
 
-      // Create deposit record
-      const { error } = await supabase.from("deposits").insert({
-        user_id: user.id,
-        amount: amountNum,
-        payment_method: paymentMethod,
-        status: "pending",
+      // Get user email for Flutterwave
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("email")
+        .eq("id", user.id)
+        .single();
+
+      // Initialize Flutterwave payment
+      const { data, error } = await supabase.functions.invoke("flutterwave-initialize", {
+        body: { 
+          amount: amountNum,
+          email: profile?.email || user.email,
+        },
       });
 
       if (error) throw error;
 
-      // In production, this would redirect to payment gateway
-      toast.success("Payment initiated! (Demo mode - balance updated)", {
+      toast.success("Redirecting to payment gateway...", {
         description: `$${amountNum.toFixed(2)} via ${paymentMethod}`,
       });
 
-      // Demo: Update balance immediately
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("balance")
-        .eq("id", user.id)
-        .single();
-
-      await supabase
-        .from("profiles")
-        .update({ balance: (profile?.balance || 0) + amountNum })
-        .eq("id", user.id);
-
-      onSuccess();
-      onOpenChange(false);
-      setAmount("");
+      // Redirect to Flutterwave payment page
+      window.location.href = data.payment_link;
     } catch (error) {
       console.error("Top up error:", error);
-      toast.error("Failed to process payment");
+      toast.error("Failed to initiate payment");
     } finally {
       setLoading(false);
     }
