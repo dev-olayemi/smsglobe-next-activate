@@ -42,6 +42,10 @@ serve(async (req) => {
 
     const userEmail = email || profile?.email || user.email;
 
+    // Get the app URL for redirect
+    const appUrl = req.headers.get('origin') || req.headers.get('referer')?.replace(/\/$/, '') || 'https://5ba5d988-4d24-4db6-8699-43700a0583e0.lovableproject.com';
+    const redirectUrl = `${appUrl}/payment-callback`;
+
     // Initialize Flutterwave payment
     const flwResponse = await fetch('https://api.flutterwave.com/v3/payments', {
       method: 'POST',
@@ -53,16 +57,16 @@ serve(async (req) => {
         tx_ref: `txn_${Date.now()}_${user.id.slice(0, 8)}`,
         amount: amount,
         currency: 'USD',
-        redirect_url: `${Deno.env.get('SUPABASE_URL')?.replace('.supabase.co', '')}/dashboard`,
+        redirect_url: redirectUrl,
         payment_options: 'card,banktransfer,ussd',
         customer: {
           email: userEmail,
           name: userEmail.split('@')[0],
         },
         customizations: {
-          title: 'SMSGlobe Top Up',
-          description: 'Add funds to your SMSGlobe account',
-          logo: 'https://your-logo-url.com/logo.png',
+          title: 'SMSGlobe Balance Top Up',
+          description: `Top up account balance - $${amount}`,
+          logo: `${appUrl}/logo.png`,
         },
       }),
     });

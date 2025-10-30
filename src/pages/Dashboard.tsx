@@ -90,7 +90,7 @@ const Dashboard = () => {
       toast.info("Purchasing number...");
       
       const { data, error } = await supabase.functions.invoke("sms-buy-number", {
-        body: { service, country, type, rental_days: days },
+        body: { service, country, type, rental_days: days, price },
       });
 
       if (error) {
@@ -110,17 +110,8 @@ const Dashboard = () => {
         return;
       }
 
-      // Deduct from user balance
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        await supabase
-          .from("profiles")
-          .update({ balance: balance - price })
-          .eq("id", user.id);
-      }
-
       toast.success(`Number purchased: ${data.phone_number}`);
-      loadData();
+      loadData(); // Reload to get updated balance and activations
     } catch (error) {
       console.error("Error buying number:", error);
       toast.error("Failed to purchase number. Please try again.");
