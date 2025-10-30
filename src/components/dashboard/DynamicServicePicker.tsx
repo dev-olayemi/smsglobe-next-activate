@@ -51,7 +51,15 @@ export const DynamicServicePicker = ({ onBuyNumber, activationType }: DynamicSer
     try {
       const { data, error } = await supabase.functions.invoke("sms-services");
       if (error) throw error;
-      setServices(data || []);
+      
+      // Convert all services from the API response
+      if (data) {
+        const allServices = data.map((item: any) => ({
+          code: item.code,
+          name: item.name
+        }));
+        setServices(allServices);
+      }
     } catch (error) {
       console.error("Error loading services:", error);
       toast.error("Failed to load services");

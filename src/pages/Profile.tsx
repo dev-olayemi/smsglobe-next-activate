@@ -11,7 +11,7 @@ import { Separator } from "@/components/ui/separator";
 import { auth } from "@/lib/auth";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Loader2, User, Mail, Key, Settings as SettingsIcon } from "lucide-react";
+import { Loader2, User, Mail, Key, Settings as SettingsIcon, Users, DollarSign, Copy } from "lucide-react";
 
 const Profile = () => {
   const navigate = useNavigate();
@@ -19,6 +19,9 @@ const Profile = () => {
   const [saving, setSaving] = useState(false);
   const [profile, setProfile] = useState<any>(null);
   const [useCashbackFirst, setUseCashbackFirst] = useState(false);
+  const [referralCode, setReferralCode] = useState("");
+  const [referralCount, setReferralCount] = useState(0);
+  const [referralEarnings, setReferralEarnings] = useState(0);
 
   useEffect(() => {
     checkAuth();
@@ -46,6 +49,9 @@ const Profile = () => {
       if (data) {
         setProfile(data);
         setUseCashbackFirst(data.use_cashback_first || false);
+        setReferralCode(data.referral_code || "");
+        setReferralCount(data.referral_count || 0);
+        setReferralEarnings(Number(data.referral_earnings || 0));
       }
     } catch (error) {
       console.error("Error loading profile:", error);
@@ -99,6 +105,17 @@ const Profile = () => {
     }
   };
 
+  const copyReferralLink = () => {
+    const referralUrl = `${window.location.origin}/signup?ref=${referralCode}`;
+    navigator.clipboard.writeText(referralUrl);
+    toast.success("Referral link copied to clipboard!");
+  };
+
+  const copyReferralCodeOnly = () => {
+    navigator.clipboard.writeText(referralCode);
+    toast.success("Referral code copied!");
+  };
+
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
@@ -120,6 +137,75 @@ const Profile = () => {
           </div>
 
           <div className="grid gap-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Users className="h-5 w-5" />
+                  Referral Program
+                </CardTitle>
+                <CardDescription>Invite friends and earn $1 for each signup</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="grid gap-4 md:grid-cols-3">
+                  <div className="space-y-1">
+                    <p className="text-sm text-muted-foreground">Your Referral Code</p>
+                    <p className="text-2xl font-bold">{referralCode}</p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-sm text-muted-foreground">Total Referrals</p>
+                    <p className="text-2xl font-bold">{referralCount}</p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-sm text-muted-foreground">Total Earned</p>
+                    <p className="text-2xl font-bold flex items-center gap-1">
+                      <DollarSign className="h-5 w-5" />
+                      {referralEarnings.toFixed(2)}
+                    </p>
+                  </div>
+                </div>
+
+                <Separator />
+
+                <div className="space-y-4">
+                  <div>
+                    <Label htmlFor="referralLink">Referral Link</Label>
+                    <div className="flex gap-2 mt-2">
+                      <Input
+                        id="referralLink"
+                        value={`${window.location.origin}/signup?ref=${referralCode}`}
+                        readOnly
+                      />
+                      <Button onClick={copyReferralLink} variant="outline">
+                        <Copy className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <Label htmlFor="referralCodeOnly">Referral Code</Label>
+                    <div className="flex gap-2 mt-2">
+                      <Input
+                        id="referralCodeOnly"
+                        value={referralCode}
+                        readOnly
+                      />
+                      <Button onClick={copyReferralCodeOnly} variant="outline">
+                        <Copy className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="bg-muted p-4 rounded-lg">
+                    <p className="text-sm">
+                      <strong>How it works:</strong> Share your referral code or link with friends. 
+                      When they sign up using your code, you'll automatically receive $1.00 bonus 
+                      added to your balance!
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">

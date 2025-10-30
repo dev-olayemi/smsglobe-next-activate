@@ -9,6 +9,7 @@ import { auth } from "@/lib/auth";
 import { Loader2 } from "lucide-react";
 import logo from "@/assets/logo.png";
 import { z } from "zod";
+import { supabase } from "@/integrations/supabase/client";
 
 const signupSchema = z.object({
   email: z.string().email("Invalid email address"),
@@ -24,6 +25,7 @@ const Signup = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [referralCode, setReferralCode] = useState("");
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -33,6 +35,13 @@ const Signup = () => {
         navigate("/dashboard");
       }
     });
+    
+    // Check for referral code in URL
+    const params = new URLSearchParams(window.location.search);
+    const refCode = params.get('ref');
+    if (refCode) {
+      setReferralCode(refCode.toUpperCase());
+    }
   }, [navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -46,8 +55,33 @@ const Signup = () => {
 
       if (error) {
         toast.error(error.message);
-      } else if (data.session) {
-        toast.success("Account created successfully!");
+      } else if (data.user) {
+        // Apply referral bonus if code provided
+        if (referralCode.trim()) {
+          try {
+            const { data: bonusResult, error: bonusError } = await supabase.rpc(
+              'apply_referral_bonus',
+              { 
+                referrer_code: referralCode.trim().toUpperCase(), 
+                new_user_id: data.user.id 
+              }
+            );
+
+            if (bonusError) {
+              console.error("Referral error:", bonusError);
+            } else if (bonusResult) {
+              toast.success("Account created! Your referrer received a $1 bonus.");
+            } else {
+              toast.success("Account created successfully!");
+            }
+          } catch (err) {
+            console.error("Referral application error:", err);
+            toast.success("Account created successfully!");
+          }
+        } else {
+          toast.success("Account created successfully!");
+        }
+        
         navigate("/dashboard");
       }
     } catch (error) {
@@ -105,6 +139,21 @@ const Signup = () => {
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 required
               />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="referralCode">Referral Code (Optional)</Label>
+              <Input
+                id="referralCode"
+                type="text"
+                placeholder="Enter referral code"
+                value={referralCode}
+                onChange={(e) => setReferralCode(e.target.value.toUpperCase())}
+                disabled={loading}
+                maxLength={8}
+              />
+              <p className="text-xs text-muted-foreground">
+                Have a referral code? Your referrer will get $1 bonus!
+              </p>
             </div>
             <Button type="submit" className="w-full" disabled={loading}>
               {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}

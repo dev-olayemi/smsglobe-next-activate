@@ -178,6 +178,10 @@ export type Database = {
           created_at: string | null
           email: string
           id: string
+          referral_code: string | null
+          referral_count: number | null
+          referral_earnings: number | null
+          referred_by: string | null
           updated_at: string | null
           use_cashback_first: boolean | null
         }
@@ -188,6 +192,10 @@ export type Database = {
           created_at?: string | null
           email: string
           id: string
+          referral_code?: string | null
+          referral_count?: number | null
+          referral_earnings?: number | null
+          referred_by?: string | null
           updated_at?: string | null
           use_cashback_first?: boolean | null
         }
@@ -198,17 +206,33 @@ export type Database = {
           created_at?: string | null
           email?: string
           id?: string
+          referral_code?: string | null
+          referral_count?: number | null
+          referral_earnings?: number | null
+          referred_by?: string | null
           updated_at?: string | null
           use_cashback_first?: boolean | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "profiles_referred_by_fkey"
+            columns: ["referred_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      apply_referral_bonus: {
+        Args: { new_user_id: string; referrer_code: string }
+        Returns: boolean
+      }
+      generate_referral_code: { Args: never; Returns: string }
     }
     Enums: {
       [_ in never]: never
