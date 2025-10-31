@@ -148,23 +148,23 @@ const Dashboard = () => {
   return (
     <div className="min-h-screen flex flex-col">
       <Header />
-      <main className="flex-1 container py-8">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold mb-2">Dashboard</h1>
+      <main className="flex-1 container px-4 py-6 md:py-8">
+        <div className="mb-6 md:mb-8">
+          <h1 className="text-2xl md:text-3xl font-bold mb-2">Dashboard</h1>
           <p className="text-muted-foreground">
             Manage your virtual numbers and account
           </p>
         </div>
 
-        <Tabs defaultValue="buy" className="space-y-6">
-          <TabsList className="grid w-full max-w-md grid-cols-3">
-            <TabsTrigger value="buy">Buy Number</TabsTrigger>
-            <TabsTrigger value="active">Active ({activations.length})</TabsTrigger>
-            <TabsTrigger value="history">History</TabsTrigger>
+        <Tabs defaultValue="buy" className="space-y-4 md:space-y-6">
+          <TabsList className="grid w-full max-w-md grid-cols-3 h-auto">
+            <TabsTrigger value="buy" className="text-xs sm:text-sm">Buy Number</TabsTrigger>
+            <TabsTrigger value="active" className="text-xs sm:text-sm">Active ({activations.length})</TabsTrigger>
+            <TabsTrigger value="history" className="text-xs sm:text-sm">History</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="buy" className="space-y-6">
-            <div className="grid gap-6 md:grid-cols-3">
+          <TabsContent value="buy" className="space-y-4 md:space-y-6">
+            <div className="grid gap-4 md:gap-6 md:grid-cols-3">
               <BalanceCard balance={balance} cashback={cashback} onTopUp={() => setShowTopUp(true)} />
               <Card className="md:col-span-2">
                 <CardHeader>
@@ -175,18 +175,18 @@ const Dashboard = () => {
                   <CardDescription>Your account overview</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="grid grid-cols-3 gap-4">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 md:gap-4">
                     <div className="space-y-1">
-                      <p className="text-sm text-muted-foreground">Total Spent</p>
-                      <p className="text-2xl font-bold">$0.00</p>
+                      <p className="text-xs sm:text-sm text-muted-foreground">Total Spent</p>
+                      <p className="text-xl md:text-2xl font-bold">$0.00</p>
                     </div>
                     <div className="space-y-1">
-                      <p className="text-sm text-muted-foreground">Active Numbers</p>
-                      <p className="text-2xl font-bold">{activations.length}</p>
+                      <p className="text-xs sm:text-sm text-muted-foreground">Active Numbers</p>
+                      <p className="text-xl md:text-2xl font-bold">{activations.length}</p>
                     </div>
-                    <div className="space-y-1">
-                      <p className="text-sm text-muted-foreground">Success Rate</p>
-                      <p className="text-2xl font-bold">100%</p>
+                    <div className="space-y-1 col-span-2 sm:col-span-1">
+                      <p className="text-xs sm:text-sm text-muted-foreground">Success Rate</p>
+                      <p className="text-xl md:text-2xl font-bold">100%</p>
                     </div>
                   </div>
                 </CardContent>

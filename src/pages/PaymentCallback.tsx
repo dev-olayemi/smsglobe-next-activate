@@ -37,8 +37,9 @@ const PaymentCallback = () => {
     }
 
     try {
+      // Use transaction_id for Flutterwave API verification
       const { data, error } = await supabase.functions.invoke("flutterwave-verify", {
-        body: { transaction_id: transactionId || txRef },
+        body: { transaction_id: transactionId },
       });
 
       if (error) throw error;
@@ -65,8 +66,8 @@ const PaymentCallback = () => {
   return (
     <div className="min-h-screen flex flex-col">
       <Header />
-      <main className="flex-1 container py-8 flex items-center justify-center">
-        <Card className="w-full max-w-md">
+      <main className="flex-1 container px-4 py-8 flex items-center justify-center">
+        <Card className="w-full max-w-md mx-auto">
           <CardHeader>
             <CardTitle className="text-center">Payment Status</CardTitle>
           </CardHeader>

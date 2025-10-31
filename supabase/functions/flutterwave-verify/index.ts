@@ -64,16 +64,38 @@ serve(async (req) => {
       );
     }
 
-    // Update deposit record
-    const { data: deposit } = await supabaseClient
+    // Update deposit record - try both tx_ref formats
+    let { data: deposit, error: depositError } = await supabaseClient
       .from('deposits')
       .select('*')
       .eq('transaction_id', paymentData.tx_ref)
       .eq('user_id', user.id)
-      .single();
+      .maybeSingle();
+
+    // If not found by tx_ref, try to create it if payment is valid
+    if (!deposit && paymentData.status === 'successful') {
+      console.log('Deposit not found, creating new record for successful payment');
+      const { data: newDeposit, error: insertError } = await supabaseClient
+        .from('deposits')
+        .insert({
+          user_id: user.id,
+          amount: paymentData.amount,
+          payment_method: 'flutterwave',
+          status: 'pending',
+          transaction_id: paymentData.tx_ref,
+        })
+        .select()
+        .single();
+      
+      if (insertError) {
+        console.error('Error creating deposit:', insertError);
+        throw new Error('Failed to create deposit record');
+      }
+      deposit = newDeposit;
+    }
 
     if (!deposit) {
-      throw new Error('Deposit record not found');
+      throw new Error('Deposit record not found and could not be created');
     }
 
     if (deposit.status === 'completed') {
