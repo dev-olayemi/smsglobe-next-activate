@@ -48,20 +48,20 @@ export const FeatureSelector = ({ selectedFeature, onFeatureChange, children }: 
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       <div>
-        <h3 className="text-lg font-semibold mb-2">Select Service Type</h3>
-        <p className="text-sm text-muted-foreground">Choose how you want to receive verification</p>
+        <h3 className="text-base sm:text-lg font-semibold mb-2">Select Service Type</h3>
+        <p className="text-xs sm:text-sm text-muted-foreground">Choose how you want to receive verification</p>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         {features.map((feature) => (
           <button
             key={feature.id}
             onClick={() => feature.available && onFeatureChange(feature.id)}
             disabled={!feature.available}
             className={cn(
-              "relative p-6 rounded-xl border-2 transition-all duration-200",
+              "relative p-4 sm:p-6 rounded-xl border-2 transition-all duration-200",
               "hover:shadow-lg hover:-translate-y-1",
               "disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-none",
               selectedFeature === feature.id
@@ -69,18 +69,18 @@ export const FeatureSelector = ({ selectedFeature, onFeatureChange, children }: 
                 : "border-border bg-card hover:border-primary/50"
             )}
           >
-            <div className="flex flex-col items-center text-center space-y-3">
+            <div className="flex flex-col items-center text-center space-y-2 sm:space-y-3">
               <div className={cn(
-                "p-3 rounded-lg",
+                "p-2 sm:p-3 rounded-lg",
                 selectedFeature === feature.id 
                   ? "bg-primary text-primary-foreground" 
                   : "bg-muted text-muted-foreground"
               )}>
-                <feature.icon className="h-6 w-6" />
+                <feature.icon className="h-5 w-5 sm:h-6 sm:w-6" />
               </div>
               <div>
-                <p className="font-semibold text-sm mb-1">{feature.name}</p>
-                <p className="text-xs text-muted-foreground">{feature.description}</p>
+                <p className="font-semibold text-xs sm:text-sm mb-1">{feature.name}</p>
+                <p className="text-[10px] sm:text-xs text-muted-foreground">{feature.description}</p>
               </div>
             </div>
             {selectedFeature === feature.id && (
@@ -90,7 +90,7 @@ export const FeatureSelector = ({ selectedFeature, onFeatureChange, children }: 
         ))}
       </div>
 
-      <div className="mt-8">
+      <div className="mt-6 sm:mt-8">
         {children}
       </div>
     </div>
