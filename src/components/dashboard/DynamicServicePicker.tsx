@@ -120,8 +120,8 @@ export const DynamicServicePicker = ({ onBuyNumber, activationType }: DynamicSer
   const selectedService = services.find((s) => s.code === service);
 
   return (
-    <div className="space-y-6">
-      <div className="space-y-4">
+    <div className="space-y-4 sm:space-y-6">
+      <div className="space-y-3 sm:space-y-4">
         <div className="space-y-2">
           <Label htmlFor="service">Select Service</Label>
           <div className="relative">
@@ -244,18 +244,18 @@ export const DynamicServicePicker = ({ onBuyNumber, activationType }: DynamicSer
         )}
 
         {selectedCountry && (
-          <div className="rounded-lg border bg-gradient-to-r from-primary/5 to-secondary/5 p-4 space-y-3">
-            <div className="flex items-center justify-between text-sm">
+          <div className="rounded-lg border bg-gradient-to-r from-primary/5 to-secondary/5 p-3 sm:p-4 space-y-2 sm:space-y-3">
+            <div className="flex items-center justify-between text-xs sm:text-sm">
               <span className="text-muted-foreground">Type:</span>
               <span className="font-medium capitalize">{activationType}</span>
             </div>
-            <div className="flex items-center justify-between text-sm">
+            <div className="flex items-center justify-between text-xs sm:text-sm">
               <span className="text-muted-foreground">Available:</span>
               <span className="font-medium">{selectedCountry.count} numbers</span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">Total Price:</span>
-              <span className="text-2xl font-bold text-primary">
+              <span className="text-xs sm:text-sm text-muted-foreground">Total Price:</span>
+              <span className="text-xl sm:text-2xl font-bold text-primary">
                 ${activationType === "rental" 
                   ? (selectedCountry.price * parseInt(rentalDays) * 5 * 1.15).toFixed(2)
                   : activationType === "voice"
