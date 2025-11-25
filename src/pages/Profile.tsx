@@ -127,10 +127,10 @@ const Profile = () => {
   return (
     <div className="min-h-screen flex flex-col">
       <Header />
-      <main className="flex-1 container py-8">
-        <div className="max-w-4xl mx-auto space-y-8">
+      <main className="flex-1 container px-4 py-6 md:py-8">
+        <div className="max-w-4xl mx-auto space-y-6 md:space-y-8">
           <div>
-            <h1 className="text-3xl font-bold mb-2">Profile & Settings</h1>
+            <h1 className="text-2xl md:text-3xl font-bold mb-2">Profile & Settings</h1>
             <p className="text-muted-foreground">
               Manage your account settings and preferences
             </p>
@@ -146,18 +146,18 @@ const Profile = () => {
                 <CardDescription>Invite friends and earn $1 for each signup</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
-                <div className="grid gap-4 md:grid-cols-3">
+                <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3">
                   <div className="space-y-1">
                     <p className="text-sm text-muted-foreground">Your Referral Code</p>
-                    <p className="text-2xl font-bold">{referralCode}</p>
+                    <p className="text-xl md:text-2xl font-bold break-all">{referralCode}</p>
                   </div>
                   <div className="space-y-1">
                     <p className="text-sm text-muted-foreground">Total Referrals</p>
-                    <p className="text-2xl font-bold">{referralCount}</p>
+                    <p className="text-xl md:text-2xl font-bold">{referralCount}</p>
                   </div>
-                  <div className="space-y-1">
+                  <div className="space-y-1 sm:col-span-2 md:col-span-1">
                     <p className="text-sm text-muted-foreground">Total Earned</p>
-                    <p className="text-2xl font-bold flex items-center gap-1">
+                    <p className="text-xl md:text-2xl font-bold flex items-center gap-1">
                       <DollarSign className="h-5 w-5" />
                       {referralEarnings.toFixed(2)}
                     </p>
@@ -169,28 +169,32 @@ const Profile = () => {
                 <div className="space-y-4">
                   <div>
                     <Label htmlFor="referralLink">Referral Link</Label>
-                    <div className="flex gap-2 mt-2">
+                    <div className="flex flex-col sm:flex-row gap-2 mt-2">
                       <Input
                         id="referralLink"
                         value={`${window.location.origin}/signup?ref=${referralCode}`}
                         readOnly
+                        className="flex-1"
                       />
-                      <Button onClick={copyReferralLink} variant="outline">
-                        <Copy className="h-4 w-4" />
+                      <Button onClick={copyReferralLink} variant="outline" className="shrink-0">
+                        <Copy className="h-4 w-4 sm:mr-0 mr-2" />
+                        <span className="sm:hidden">Copy Link</span>
                       </Button>
                     </div>
                   </div>
 
                   <div>
                     <Label htmlFor="referralCodeOnly">Referral Code</Label>
-                    <div className="flex gap-2 mt-2">
+                    <div className="flex flex-col sm:flex-row gap-2 mt-2">
                       <Input
                         id="referralCodeOnly"
                         value={referralCode}
                         readOnly
+                        className="flex-1"
                       />
-                      <Button onClick={copyReferralCodeOnly} variant="outline">
-                        <Copy className="h-4 w-4" />
+                      <Button onClick={copyReferralCodeOnly} variant="outline" className="shrink-0">
+                        <Copy className="h-4 w-4 sm:mr-0 mr-2" />
+                        <span className="sm:hidden">Copy Code</span>
                       </Button>
                     </div>
                   </div>
@@ -249,7 +253,7 @@ const Profile = () => {
               <CardContent className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="api-key">API Key</Label>
-                  <div className="flex gap-2">
+                  <div className="flex flex-col sm:flex-row gap-2">
                     <Input
                       id="api-key"
                       type="password"
@@ -257,7 +261,7 @@ const Profile = () => {
                       disabled
                       className="flex-1 font-mono text-sm"
                     />
-                    <Button onClick={generateApiKey} variant="outline">
+                    <Button onClick={generateApiKey} variant="outline" className="shrink-0">
                       {profile?.api_key ? "Regenerate" : "Generate"}
                     </Button>
                   </div>

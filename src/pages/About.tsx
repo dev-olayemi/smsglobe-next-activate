@@ -5,9 +5,9 @@ const About = () => {
   return (
     <div className="min-h-screen flex flex-col">
       <Header />
-      <main className="flex-1 container py-20">
+      <main className="flex-1 container px-4 py-12 md:py-20">
         <div className="max-w-3xl mx-auto">
-          <h1 className="text-4xl font-bold mb-8">About SMSGlobe</h1>
+          <h1 className="text-3xl md:text-4xl font-bold mb-8">About SMSGlobe</h1>
           
           <div className="prose prose-lg max-w-none space-y-6 text-muted-foreground">
             <p>

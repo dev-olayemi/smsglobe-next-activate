@@ -58,10 +58,10 @@ const Transactions = () => {
   return (
     <div className="min-h-screen flex flex-col">
       <Header />
-      <main className="flex-1 container py-8">
-        <div className="max-w-4xl mx-auto space-y-6">
+      <main className="flex-1 container px-4 py-6 md:py-8">
+        <div className="max-w-4xl mx-auto space-y-4 md:space-y-6">
           <div>
-            <h1 className="text-3xl font-bold mb-2">Transaction History</h1>
+            <h1 className="text-2xl md:text-3xl font-bold mb-2">Transaction History</h1>
             <p className="text-muted-foreground">
               View all your balance transactions and deposits
             </p>
@@ -85,33 +85,33 @@ const Transactions = () => {
                   <p className="text-sm">Your transaction history will appear here</p>
                 </div>
               ) : (
-                <div className="space-y-3">
+                <div className="space-y-2 md:space-y-3">
                   {transactions.map((transaction) => (
                     <div
                       key={transaction.id}
-                      className="flex items-center justify-between p-4 rounded-lg border bg-card hover:bg-muted/50 transition-colors"
+                      className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 p-3 md:p-4 rounded-lg border bg-card hover:bg-muted/50 transition-colors"
                     >
-                      <div className="flex items-center gap-4">
-                        <div className={`p-2 rounded-full ${
+                      <div className="flex items-center gap-3 md:gap-4 flex-1">
+                        <div className={`p-2 rounded-full shrink-0 ${
                           transaction.type === "deposit" 
                             ? "bg-success/10 text-success"
                             : "bg-destructive/10 text-destructive"
                         }`}>
                           {transaction.type === "deposit" ? (
-                            <ArrowDownCircle className="h-5 w-5" />
+                            <ArrowDownCircle className="h-4 w-4 md:h-5 md:w-5" />
                           ) : (
-                            <ArrowUpCircle className="h-5 w-5" />
+                            <ArrowUpCircle className="h-4 w-4 md:h-5 md:w-5" />
                           )}
                         </div>
-                        <div>
-                          <p className="font-medium">{transaction.description}</p>
-                          <p className="text-sm text-muted-foreground">
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-sm md:text-base truncate">{transaction.description}</p>
+                          <p className="text-xs md:text-sm text-muted-foreground">
                             {format(new Date(transaction.created_at), "MMM dd, yyyy 'at' h:mm a")}
                           </p>
                         </div>
                       </div>
-                      <div className="text-right">
-                        <p className={`font-bold text-lg ${
+                      <div className="text-left sm:text-right shrink-0">
+                        <p className={`font-bold text-base md:text-lg ${
                           transaction.type === "deposit" 
                             ? "text-success"
                             : "text-destructive"
