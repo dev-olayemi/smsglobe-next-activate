@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
@@ -8,72 +8,39 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
-import { auth } from "@/lib/auth";
-import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/lib/auth-context";
+import { firestoreService } from "@/lib/firestore-service";
 import { toast } from "sonner";
 import { Loader2, User, Mail, Key, Settings as SettingsIcon, Users, DollarSign, Copy } from "lucide-react";
 
 const Profile = () => {
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(true);
+  const { user, profile, loading, refreshProfile } = useAuth();
   const [saving, setSaving] = useState(false);
-  const [profile, setProfile] = useState<any>(null);
-  const [useCashbackFirst, setUseCashbackFirst] = useState(false);
-  const [referralCode, setReferralCode] = useState("");
-  const [referralCount, setReferralCount] = useState(0);
-  const [referralEarnings, setReferralEarnings] = useState(0);
+  const [useCashbackFirst, setUseCashbackFirst] = useState(profile?.useCashbackFirst || false);
 
-  useEffect(() => {
-    checkAuth();
-    loadProfile();
-  }, []);
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
-  const checkAuth = async () => {
-    const { session } = await auth.getSession();
-    if (!session) {
-      navigate("/login");
-    }
-  };
+  if (!user) {
+    navigate("/login");
+    return null;
+  }
 
-  const loadProfile = async () => {
-    try {
-      const { session } = await auth.getSession();
-      if (!session) return;
-
-      const { data } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", session.user.id)
-        .single();
-
-      if (data) {
-        setProfile(data);
-        setUseCashbackFirst(data.use_cashback_first || false);
-        setReferralCode(data.referral_code || "");
-        setReferralCount(data.referral_count || 0);
-        setReferralEarnings(Number(data.referral_earnings || 0));
-      }
-    } catch (error) {
-      console.error("Error loading profile:", error);
-      toast.error("Failed to load profile");
-    } finally {
-      setLoading(false);
-    }
-  };
+  const referralCode = profile?.referralCode || "";
+  const referralCount = profile?.referralCount || 0;
+  const referralEarnings = profile?.referralEarnings || 0;
 
   const handleSaveSettings = async () => {
     setSaving(true);
     try {
-      const { session } = await auth.getSession();
-      if (!session) return;
-
-      const { error } = await supabase
-        .from("profiles")
-        .update({ use_cashback_first: useCashbackFirst })
-        .eq("id", session.user.id);
-
-      if (error) throw error;
-
+      await firestoreService.updateUserProfile(user.uid, { useCashbackFirst });
+      await refreshProfile();
       toast.success("Settings saved successfully");
     } catch (error) {
       console.error("Error saving settings:", error);
@@ -85,19 +52,9 @@ const Profile = () => {
 
   const generateApiKey = async () => {
     try {
-      const { session } = await auth.getSession();
-      if (!session) return;
-
       const newApiKey = `sk_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
-
-      const { error } = await supabase
-        .from("profiles")
-        .update({ api_key: newApiKey })
-        .eq("id", session.user.id);
-
-      if (error) throw error;
-
-      setProfile({ ...profile, api_key: newApiKey });
+      await firestoreService.updateUserProfile(user.uid, { apiKey: newApiKey });
+      await refreshProfile();
       toast.success("API key generated successfully");
     } catch (error) {
       console.error("Error generating API key:", error);
@@ -115,14 +72,6 @@ const Profile = () => {
     navigator.clipboard.writeText(referralCode);
     toast.success("Referral code copied!");
   };
-
-  if (loading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -226,7 +175,7 @@ const Profile = () => {
                     <Input
                       id="email"
                       type="email"
-                      value={profile?.email || ""}
+                      value={user.email || ""}
                       disabled
                       className="flex-1"
                     />
@@ -235,7 +184,7 @@ const Profile = () => {
 
                 <div className="space-y-2">
                   <Label>User ID</Label>
-                  <Input value={profile?.id || ""} disabled />
+                  <Input value={user.uid} disabled />
                 </div>
               </CardContent>
             </Card>
@@ -257,12 +206,12 @@ const Profile = () => {
                     <Input
                       id="api-key"
                       type="password"
-                      value={profile?.api_key || "Not generated yet"}
+                      value={profile?.apiKey || "Not generated yet"}
                       disabled
                       className="flex-1 font-mono text-sm"
                     />
                     <Button onClick={generateApiKey} variant="outline" className="shrink-0">
-                      {profile?.api_key ? "Regenerate" : "Generate"}
+                      {profile?.apiKey ? "Regenerate" : "Generate"}
                     </Button>
                   </div>
                   <p className="text-xs text-muted-foreground">
