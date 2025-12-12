@@ -7,63 +7,38 @@ import { DynamicServicePicker } from "@/components/dashboard/DynamicServicePicke
 import { FeatureSelector } from "@/components/dashboard/FeatureSelector";
 import { TopUpModal } from "@/components/dashboard/TopUpModal";
 import { ActiveActivations } from "@/components/dashboard/ActiveActivations";
-import { auth } from "@/lib/auth";
-import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/lib/auth-context";
+import { firestoreService } from "@/lib/firestore-service";
 import { toast } from "sonner";
 import { Loader2, History, Key } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const Dashboard = () => {
   const navigate = useNavigate();
+  const { user, profile, loading: authLoading, refreshProfile } = useAuth();
   const [loading, setLoading] = useState(true);
-  const [balance, setBalance] = useState(0);
-  const [cashback, setCashback] = useState(0);
   const [activations, setActivations] = useState<any[]>([]);
   const [showTopUp, setShowTopUp] = useState(false);
   const [activationType, setActivationType] = useState("activation");
 
   useEffect(() => {
-    checkAuth();
-    loadData();
-  }, []);
-
-  const checkAuth = async () => {
-    const { session } = await auth.getSession();
-    if (!session) {
-      navigate("/login");
-      return;
+    if (!authLoading) {
+      if (!user) {
+        navigate("/login");
+      } else {
+        loadData();
+      }
     }
-  };
+  }, [user, authLoading, navigate]);
 
   const loadData = async () => {
+    if (!user) return;
+    
     try {
-      const { session } = await auth.getSession();
-      if (!session) return;
-
-      // Load profile
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", session.user.id)
-        .single();
-
-      if (profile) {
-        setBalance(Number(profile.balance || 0));
-        setCashback(Number(profile.cashback || 0));
-      }
-
       // Load activations
-      const { data: activationsData } = await supabase
-        .from("activations")
-        .select("*")
-        .eq("user_id", session.user.id)
-        .order("created_at", { ascending: false });
-
-      if (activationsData) {
-        setActivations(activationsData);
-      }
+      const userActivations = await firestoreService.getUserActivations(user.uid);
+      setActivations(userActivations);
     } catch (error) {
       console.error("Error loading data:", error);
     } finally {
@@ -72,63 +47,29 @@ const Dashboard = () => {
   };
 
   const handleBuyNumber = async (service: string, country: string, price: number, type: string, days?: number) => {
-    try {
-      // Check if user has sufficient balance
-      if (balance < price) {
-        toast.error(
-          `Insufficient balance. You need $${price.toFixed(2)} but have $${balance.toFixed(2)}`,
-          {
-            action: {
-              label: "Top Up",
-              onClick: () => setShowTopUp(true),
-            },
-          }
-        );
-        return;
-      }
-
-      toast.info("Purchasing number...");
-      
-      const { data, error } = await supabase.functions.invoke("sms-buy-number", {
-        body: { service, country, type, rental_days: days, price },
-      });
-
-      if (error) {
-        // Handle specific API errors
-        if (error.message === "NO_BALANCE") {
-          toast.error(
-            "Platform balance is low. Please contact support or try again later.",
-            {
-              duration: 6000,
-            }
-          );
-        } else if (error.message.includes("NO_NUMBERS")) {
-          toast.error("No numbers available for this service/country combination. Please try another country.");
-        } else {
-          toast.error(`Failed to purchase: ${error.message}`);
+    const balance = profile?.balance || 0;
+    
+    // Check if user has sufficient balance
+    if (balance < price) {
+      toast.error(
+        `Insufficient balance. You need $${price.toFixed(2)} but have $${balance.toFixed(2)}`,
+        {
+          action: {
+            label: "Top Up",
+            onClick: () => setShowTopUp(true),
+          },
         }
-        return;
-      }
-
-      toast.success(`Number purchased: ${data.phone_number}`);
-      loadData(); // Reload to get updated balance and activations
-    } catch (error) {
-      console.error("Error buying number:", error);
-      toast.error("Failed to purchase number. Please try again.");
+      );
+      return;
     }
+
+    toast.info("Purchasing number... (SMS API not connected yet)");
+    // TODO: Implement SMS API integration when ready
   };
 
   const handleCancelActivation = async (id: string) => {
     try {
-      // Find activation
-      const activation = activations.find((a) => a.id === id);
-      if (!activation) return;
-
-      // Cancel via API
-      await supabase.functions.invoke("sms-cancel", {
-        body: { activation_id: activation.activation_id },
-      });
-
+      await firestoreService.updateActivation(id, { status: 'cancelled' });
       toast.success("Activation cancelled");
       loadData();
     } catch (error) {
@@ -137,13 +78,16 @@ const Dashboard = () => {
     }
   };
 
-  if (loading) {
+  if (authLoading || loading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }
+
+  const balance = profile?.balance || 0;
+  const cashback = 0; // Cashback feature can be added later
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -239,7 +183,10 @@ const Dashboard = () => {
       <TopUpModal
         open={showTopUp}
         onOpenChange={setShowTopUp}
-        onSuccess={loadData}
+        onSuccess={() => {
+          refreshProfile();
+          loadData();
+        }}
       />
     </div>
   );

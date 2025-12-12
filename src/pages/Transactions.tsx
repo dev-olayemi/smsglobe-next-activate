@@ -3,43 +3,33 @@ import { useNavigate } from "react-router-dom";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { auth } from "@/lib/auth";
-import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/lib/auth-context";
+import { firestoreService, BalanceTransaction } from "@/lib/firestore-service";
 import { Loader2, ArrowDownCircle, ArrowUpCircle, History } from "lucide-react";
 import { format } from "date-fns";
 
 const Transactions = () => {
   const navigate = useNavigate();
+  const { user, loading: authLoading } = useAuth();
   const [loading, setLoading] = useState(true);
-  const [transactions, setTransactions] = useState<any[]>([]);
+  const [transactions, setTransactions] = useState<BalanceTransaction[]>([]);
 
   useEffect(() => {
-    checkAuth();
-    loadTransactions();
-  }, []);
-
-  const checkAuth = async () => {
-    const { session } = await auth.getSession();
-    if (!session) {
-      navigate("/login");
+    if (!authLoading) {
+      if (!user) {
+        navigate("/login");
+      } else {
+        loadTransactions();
+      }
     }
-  };
+  }, [user, authLoading, navigate]);
 
   const loadTransactions = async () => {
+    if (!user) return;
+    
     try {
-      const { session } = await auth.getSession();
-      if (!session) return;
-
-      const { data } = await supabase
-        .from("balance_transactions")
-        .select("*")
-        .eq("user_id", session.user.id)
-        .order("created_at", { ascending: false });
-
-      if (data) {
-        setTransactions(data);
-      }
+      const data = await firestoreService.getUserTransactions(user.uid);
+      setTransactions(data);
     } catch (error) {
       console.error("Error loading transactions:", error);
     } finally {
@@ -47,7 +37,7 @@ const Transactions = () => {
     }
   };
 
-  if (loading) {
+  if (authLoading || loading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -93,11 +83,11 @@ const Transactions = () => {
                     >
                       <div className="flex items-center gap-3 md:gap-4 flex-1">
                         <div className={`p-2 rounded-full shrink-0 ${
-                          transaction.type === "deposit" 
+                          transaction.type === "deposit" || transaction.type === "referral_bonus"
                             ? "bg-success/10 text-success"
                             : "bg-destructive/10 text-destructive"
                         }`}>
-                          {transaction.type === "deposit" ? (
+                          {transaction.type === "deposit" || transaction.type === "referral_bonus" ? (
                             <ArrowDownCircle className="h-4 w-4 md:h-5 md:w-5" />
                           ) : (
                             <ArrowUpCircle className="h-4 w-4 md:h-5 md:w-5" />
@@ -106,21 +96,21 @@ const Transactions = () => {
                         <div className="flex-1 min-w-0">
                           <p className="font-medium text-sm md:text-base truncate">{transaction.description}</p>
                           <p className="text-xs md:text-sm text-muted-foreground">
-                            {format(new Date(transaction.created_at), "MMM dd, yyyy 'at' h:mm a")}
+                            {format(transaction.createdAt.toDate(), "MMM dd, yyyy 'at' h:mm a")}
                           </p>
                         </div>
                       </div>
                       <div className="text-left sm:text-right shrink-0">
                         <p className={`font-bold text-base md:text-lg ${
-                          transaction.type === "deposit" 
+                          transaction.type === "deposit" || transaction.type === "referral_bonus"
                             ? "text-success"
                             : "text-destructive"
                         }`}>
-                          {transaction.type === "deposit" ? "+" : "-"}
+                          {transaction.type === "deposit" || transaction.type === "referral_bonus" ? "+" : "-"}
                           ${Number(transaction.amount).toFixed(2)}
                         </p>
                         <p className="text-xs text-muted-foreground">
-                          Balance: ${Number(transaction.balance_after).toFixed(2)}
+                          Balance: ${Number(transaction.balanceAfter).toFixed(2)}
                         </p>
                       </div>
                     </div>
