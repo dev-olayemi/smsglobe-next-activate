@@ -1,5 +1,4 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -12,35 +11,15 @@ serve(async (req) => {
   }
 
   try {
-    const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      {
-        global: {
-          headers: { Authorization: req.headers.get('Authorization')! },
-        },
-      }
-    );
+    const { amount, amountUSD, email, txRef, userId, depositId, currency } = await req.json();
 
-    const { data: { user } } = await supabaseClient.auth.getUser();
-    if (!user) {
-      throw new Error('Not authenticated');
+    if (!amount || amount < 100) {
+      throw new Error('Invalid amount (minimum ₦100)');
     }
 
-    const { amount, email } = await req.json();
-
-    if (!amount || amount < 1) {
-      throw new Error('Invalid amount');
+    if (!email || !txRef || !userId) {
+      throw new Error('Missing required fields');
     }
-
-    // Get user profile for email
-    const { data: profile } = await supabaseClient
-      .from('profiles')
-      .select('email')
-      .eq('id', user.id)
-      .single();
-
-    const userEmail = email || profile?.email || user.email;
 
     // Get the app URL for redirect
     const appUrl = req.headers.get('origin') || req.headers.get('referer')?.replace(/\/$/, '') || 'https://5ba5d988-4d24-4db6-8699-43700a0583e0.lovableproject.com';
@@ -54,18 +33,23 @@ serve(async (req) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        tx_ref: `txn_${Date.now()}_${user.id.slice(0, 8)}`,
+        tx_ref: txRef,
         amount: amount,
-        currency: 'USD',
+        currency: currency || 'NGN',
         redirect_url: redirectUrl,
         payment_options: 'card,banktransfer,ussd',
+        meta: {
+          user_id: userId,
+          deposit_id: depositId,
+          amount_usd: amountUSD,
+        },
         customer: {
-          email: userEmail,
-          name: userEmail.split('@')[0],
+          email: email,
+          name: email.split('@')[0],
         },
         customizations: {
           title: 'SMSGlobe Balance Top Up',
-          description: `Top up account balance - $${amount}`,
+          description: `Top up account balance - $${amountUSD} USD`,
           logo: `${appUrl}/logo.png`,
         },
       }),
@@ -78,19 +62,10 @@ serve(async (req) => {
       throw new Error(flwData.message || 'Failed to initialize payment');
     }
 
-    // Create deposit record
-    await supabaseClient.from('deposits').insert({
-      user_id: user.id,
-      amount: amount,
-      payment_method: 'flutterwave',
-      status: 'pending',
-      transaction_id: flwData.data.tx_ref,
-    });
-
     return new Response(
       JSON.stringify({
         payment_link: flwData.data.link,
-        tx_ref: flwData.data.tx_ref,
+        tx_ref: txRef,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );

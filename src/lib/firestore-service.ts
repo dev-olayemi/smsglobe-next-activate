@@ -21,6 +21,7 @@ export interface UserProfile {
   displayName?: string;
   photoURL?: string;
   balance: number;
+  cashback: number;
   useCashbackFirst: boolean;
   referralCode: string;
   referredBy: string | null;
@@ -61,8 +62,11 @@ export interface Activation {
 export interface Deposit {
   id: string;
   userId: string;
-  amount: number;
+  amountUSD: number;
+  amountNGN: number;
+  exchangeRate: number;
   status: 'pending' | 'completed' | 'failed';
+  paymentMethod: 'flutterwave' | 'crypto';
   txRef: string;
   transactionId?: string;
   createdAt: Timestamp;
@@ -148,7 +152,7 @@ export const firestoreService = {
     });
   },
 
-  // ===== DEPOSITS =====
+// ===== DEPOSITS =====
   async createDeposit(deposit: Omit<Deposit, 'id' | 'createdAt'>) {
     const colRef = collection(db, "deposits");
     const docRef = await addDoc(colRef, {
@@ -158,14 +162,25 @@ export const firestoreService = {
     return docRef.id;
   },
 
+  async getUserDeposits(userId: string): Promise<Deposit[]> {
+    const colRef = collection(db, "deposits");
+    const q = query(
+      colRef,
+      where("userId", "==", userId),
+      orderBy("createdAt", "desc")
+    );
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Deposit));
+  },
+
   async getDepositByTxRef(txRef: string): Promise<Deposit | null> {
     const colRef = collection(db, "deposits");
     const q = query(colRef, where("txRef", "==", txRef));
     const snapshot = await getDocs(q);
     
     if (!snapshot.empty) {
-      const doc = snapshot.docs[0];
-      return { id: doc.id, ...doc.data() } as Deposit;
+      const docSnap = snapshot.docs[0];
+      return { id: docSnap.id, ...docSnap.data() } as Deposit;
     }
     return null;
   },
@@ -173,6 +188,36 @@ export const firestoreService = {
   async updateDeposit(depositId: string, data: Partial<Deposit>) {
     const docRef = doc(db, "deposits", depositId);
     await updateDoc(docRef, data);
+  },
+
+  // ===== COMPLETE DEPOSIT (after payment verification) =====
+  async completeDeposit(depositId: string, userId: string, amountUSD: number, transactionId: string) {
+    // Get current user profile
+    const profile = await this.getUserProfile(userId);
+    if (!profile) throw new Error('User profile not found');
+
+    const newBalance = (profile.balance || 0) + amountUSD;
+
+    // Update deposit status
+    await this.updateDeposit(depositId, {
+      status: 'completed',
+      transactionId,
+      completedAt: serverTimestamp() as Timestamp
+    });
+
+    // Update user balance
+    await this.updateUserBalance(userId, newBalance);
+
+    // Add transaction record
+    await this.addBalanceTransaction({
+      userId,
+      type: 'deposit',
+      amount: amountUSD,
+      description: `Deposit via Flutterwave`,
+      balanceAfter: newBalance
+    });
+
+    return newBalance;
   },
 
   // ===== REFERRALS =====
