@@ -1,5 +1,4 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -12,22 +11,7 @@ serve(async (req) => {
   }
 
   try {
-    const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      {
-        global: {
-          headers: { Authorization: req.headers.get('Authorization')! },
-        },
-      }
-    );
-
-    const { data: { user } } = await supabaseClient.auth.getUser();
-    if (!user) {
-      throw new Error('Not authenticated');
-    }
-
-    const { transaction_id } = await req.json();
+    const { transaction_id, tx_ref } = await req.json();
 
     if (!transaction_id) {
       throw new Error('Transaction ID required');
@@ -48,7 +32,7 @@ serve(async (req) => {
     console.log('Flutterwave verification response:', flwData);
 
     if (flwData.status !== 'success') {
-      throw new Error('Payment verification failed');
+      throw new Error('Payment verification failed with Flutterwave');
     }
 
     const paymentData = flwData.data;
@@ -58,95 +42,35 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({ 
           status: 'failed',
-          message: 'Payment was not successful' 
+          message: `Payment was not successful. Status: ${paymentData.status}` 
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Update deposit record - try both tx_ref formats
-    let { data: deposit, error: depositError } = await supabaseClient
-      .from('deposits')
-      .select('*')
-      .eq('transaction_id', paymentData.tx_ref)
-      .eq('user_id', user.id)
-      .maybeSingle();
+    // Extract metadata
+    const meta = paymentData.meta || {};
+    const userId = meta.user_id;
+    const depositId = meta.deposit_id;
+    const amountUSD = meta.amount_usd || 0;
 
-    // If not found by tx_ref, try to create it if payment is valid
-    if (!deposit && paymentData.status === 'successful') {
-      console.log('Deposit not found, creating new record for successful payment');
-      const { data: newDeposit, error: insertError } = await supabaseClient
-        .from('deposits')
-        .insert({
-          user_id: user.id,
-          amount: paymentData.amount,
-          payment_method: 'flutterwave',
-          status: 'pending',
-          transaction_id: paymentData.tx_ref,
-        })
-        .select()
-        .single();
-      
-      if (insertError) {
-        console.error('Error creating deposit:', insertError);
-        throw new Error('Failed to create deposit record');
-      }
-      deposit = newDeposit;
-    }
-
-    if (!deposit) {
-      throw new Error('Deposit record not found and could not be created');
-    }
-
-    if (deposit.status === 'completed') {
-      return new Response(
-        JSON.stringify({ 
-          status: 'already_processed',
-          message: 'This payment has already been processed' 
-        }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    // Update deposit status
-    await supabaseClient
-      .from('deposits')
-      .update({ 
-        status: 'completed',
-        completed_at: new Date().toISOString(),
-      })
-      .eq('id', deposit.id);
-
-    // Update user balance
-    const { data: profile } = await supabaseClient
-      .from('profiles')
-      .select('balance')
-      .eq('id', user.id)
-      .single();
-
-    const newBalance = (profile?.balance || 0) + paymentData.amount;
-
-    await supabaseClient
-      .from('profiles')
-      .update({ balance: newBalance })
-      .eq('id', user.id);
-
-    // Create transaction record
-    await supabaseClient
-      .from('balance_transactions')
-      .insert({
-        user_id: user.id,
-        type: 'deposit',
-        amount: paymentData.amount,
-        balance_after: newBalance,
-        description: `Deposit via Flutterwave - ${paymentData.tx_ref}`,
-      });
-
+    // Return verification data for frontend to process with Firebase
     return new Response(
       JSON.stringify({
         status: 'success',
-        amount: paymentData.amount,
-        new_balance: newBalance,
+        verified: true,
+        data: {
+          transactionId: transaction_id,
+          txRef: paymentData.tx_ref,
+          amountNGN: paymentData.amount,
+          amountUSD: amountUSD,
+          currency: paymentData.currency,
+          userId: userId,
+          depositId: depositId,
+          customerEmail: paymentData.customer?.email,
+          paymentType: paymentData.payment_type,
+          createdAt: paymentData.created_at,
+        }
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
@@ -154,7 +78,7 @@ serve(async (req) => {
     console.error('Payment verification error:', error);
     const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
     return new Response(
-      JSON.stringify({ error: errorMessage }),
+      JSON.stringify({ error: errorMessage, status: 'error' }),
       { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
