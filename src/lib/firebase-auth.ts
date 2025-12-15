@@ -6,7 +6,7 @@ import {
   signOut,
   User
 } from "firebase/auth";
-import { doc, setDoc, getDoc, serverTimestamp } from "firebase/firestore";
+import { doc, setDoc, getDoc, serverTimestamp, collection, query, where, getDocs } from "firebase/firestore";
 import { firebaseAuth, db, googleProvider } from "./firebase";
 
 export interface AuthState {
@@ -16,15 +16,29 @@ export interface AuthState {
 
 export const firebaseAuthService = {
   // Email/Password Sign Up
-  async signUp(email: string, password: string) {
+  async signUp(email: string, password: string, username?: string) {
     try {
+      // Check username availability if provided
+      if (username) {
+        const usernameQuery = query(
+          collection(db, "users"),
+          where("username", "==", username.toLowerCase())
+        );
+        const usernameSnapshot = await getDocs(usernameQuery);
+        if (!usernameSnapshot.empty) {
+          return { user: null, error: "Username is already taken" };
+        }
+      }
+
       const userCredential = await createUserWithEmailAndPassword(firebaseAuth, email, password);
       const user = userCredential.user;
       
       // Create user profile in Firestore
       await setDoc(doc(db, "users", user.uid), {
         email: user.email,
+        username: username?.toLowerCase() || null,
         balance: 0,
+        cashback: 0,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
         useCashbackFirst: true,
@@ -40,9 +54,26 @@ export const firebaseAuthService = {
     }
   },
 
-  // Email/Password Sign In
-  async signIn(email: string, password: string) {
+  // Email/Password Sign In (supports email OR username)
+  async signIn(identifier: string, password: string) {
     try {
+      let email = identifier;
+      
+      // Check if identifier is username (doesn't contain @)
+      if (!identifier.includes('@')) {
+        const usernameQuery = query(
+          collection(db, "users"),
+          where("username", "==", identifier.toLowerCase())
+        );
+        const snapshot = await getDocs(usernameQuery);
+        
+        if (snapshot.empty) {
+          return { user: null, error: "User not found" };
+        }
+        
+        email = snapshot.docs[0].data().email;
+      }
+
       const userCredential = await signInWithEmailAndPassword(firebaseAuth, email, password);
       return { user: userCredential.user, error: null };
     } catch (error: any) {
@@ -61,9 +92,11 @@ export const firebaseAuthService = {
       if (!userDoc.exists()) {
         await setDoc(doc(db, "users", user.uid), {
           email: user.email,
+          username: null,
           displayName: user.displayName,
           photoURL: user.photoURL,
           balance: 0,
+          cashback: 0,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
           useCashbackFirst: true,
@@ -76,8 +109,6 @@ export const firebaseAuthService = {
       
       return { user, error: null };
     } catch (error: any) {
-      // Popup may be blocked or network issues may prevent the popup flow.
-      // Fall back to redirect flow which uses the same Firebase auth handler.
       try {
         await signInWithRedirect(firebaseAuth, googleProvider);
         return { user: null, error: null };
