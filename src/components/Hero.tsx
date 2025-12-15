@@ -20,33 +20,30 @@ export const Hero = () => {
           {/* Badge */}
           <div className="mb-6 sm:mb-8 inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 sm:px-4 py-1.5 text-xs sm:text-sm shadow-sm">
             <div className="h-2 w-2 rounded-full bg-success animate-pulse" />
-            <span className="font-medium">190+ Countries • 50K+ Daily Verifications</span>
+            <span className="font-medium">eSIM • Gift • Proxy • RDP • SMS Numbers</span>
           </div>
 
-          {/* Main heading */}
-          <h1 className="mb-4 sm:mb-6 text-3xl sm:text-4xl font-bold tracking-tight md:text-6xl lg:text-7xl px-4">
-            Get a Virtual Number
-            <br />
-            <span className="bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-              in 10 Seconds
-            </span>
+          {/* Main heading (clean sans, moderate scale) */}
+          <h1 className="mb-3 text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight px-4">
+            Buy SMS Numbers & eSIMs
           </h1>
 
-          <p className="mb-8 sm:mb-10 text-base sm:text-lg text-muted-foreground md:text-xl max-w-2xl mx-auto px-4">
-            Instant virtual phone numbers for SMS verification. 
-            Fast, secure, and reliable. No registration needed.
+          <h2 className="mb-4 text-xl sm:text-2xl text-primary font-semibold px-4">Instant — Private — Global</h2>
+
+          <p className="mb-8 sm:mb-10 text-base sm:text-lg text-muted-foreground max-w-2xl mx-auto px-4">
+            Purchase virtual phone numbers, eSIMs and digital gifts with immediate activation. We operate a manual fulfilment model — place an order and our admin will prepare and deliver your details in the dashboard.
           </p>
 
           {/* CTA buttons */}
           <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center mb-12 sm:mb-16 px-4">
             <Button size="lg" className="text-sm sm:text-base shadow-xl hover:shadow-2xl transition-all w-full sm:w-auto" asChild>
               <Link to="/dashboard">
-                Start Now
+                Buy Number
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Link>
             </Button>
             <Button size="lg" variant="outline" className="text-sm sm:text-base w-full sm:w-auto" asChild>
-              <Link to="/api-docs">View API Docs</Link>
+              <Link to="/top-up">Top Up</Link>
             </Button>
           </div>
 

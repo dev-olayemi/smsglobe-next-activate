@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Loader2, Search } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import firestoreApi from "@/lib/firestoreApi";
 import { Input } from "@/components/ui/input";
 import { getServiceLogo, getCountryData } from "@/lib/service-data";
 import { toast } from "sonner";
@@ -49,7 +49,7 @@ export const DynamicServicePicker = ({ onBuyNumber, activationType }: DynamicSer
 
   const loadServices = async () => {
     try {
-      const { data, error } = await supabase.functions.invoke("sms-services");
+      const { data, error } = await firestoreApi.invokeFunction("sms-services");
       if (error) throw error;
       
       // Convert all services from the API response
@@ -71,9 +71,7 @@ export const DynamicServicePicker = ({ onBuyNumber, activationType }: DynamicSer
     
     setLoadingCountries(true);
     try {
-      const { data, error } = await supabase.functions.invoke("sms-countries", {
-        body: { service },
-      });
+      const { data, error } = await firestoreApi.invokeFunction("sms-countries", { service });
       if (error) throw error;
       setCountries(data || []);
     } catch (error) {

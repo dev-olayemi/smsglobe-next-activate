@@ -11,7 +11,7 @@ import { Separator } from "@/components/ui/separator";
 import { useAuth } from "@/lib/auth-context";
 import { firestoreService } from "@/lib/firestore-service";
 import { toast } from "sonner";
-import { Loader2, User, Mail, Key, Settings as SettingsIcon, Users, DollarSign, Copy } from "lucide-react";
+import { Loader2, User, Mail, Settings as SettingsIcon, Users, DollarSign, Copy } from "lucide-react";
 
 const Profile = () => {
   const navigate = useNavigate();
@@ -50,17 +50,6 @@ const Profile = () => {
     }
   };
 
-  const generateApiKey = async () => {
-    try {
-      const newApiKey = `sk_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
-      await firestoreService.updateUserProfile(user.uid, { apiKey: newApiKey });
-      await refreshProfile();
-      toast.success("API key generated successfully");
-    } catch (error) {
-      console.error("Error generating API key:", error);
-      toast.error("Failed to generate API key");
-    }
-  };
 
   const copyReferralLink = () => {
     const referralUrl = `${window.location.origin}/signup?ref=${referralCode}`;
@@ -189,37 +178,7 @@ const Profile = () => {
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Key className="h-5 w-5" />
-                  API Access
-                </CardTitle>
-                <CardDescription>
-                  Generate and manage your API key for programmatic access
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="api-key">API Key</Label>
-                  <div className="flex flex-col sm:flex-row gap-2">
-                    <Input
-                      id="api-key"
-                      type="password"
-                      value={profile?.apiKey || "Not generated yet"}
-                      disabled
-                      className="flex-1 font-mono text-sm"
-                    />
-                    <Button onClick={generateApiKey} variant="outline" className="shrink-0">
-                      {profile?.apiKey ? "Regenerate" : "Generate"}
-                    </Button>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Keep your API key secure. Don't share it with anyone.
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
+            {/* API access removed - product is user-facing only */}
 
             <Card>
               <CardHeader>

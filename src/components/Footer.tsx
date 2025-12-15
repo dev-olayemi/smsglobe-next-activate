@@ -24,13 +24,13 @@ export const Footer = () => {
                 </Link>
               </li>
               <li>
-                <Link to="/api-docs" className="text-muted-foreground hover:text-foreground transition-colors">
-                  API Documentation
+                <Link to="/dashboard" className="text-muted-foreground hover:text-foreground transition-colors">
+                  Dashboard
                 </Link>
               </li>
               <li>
-                <Link to="/dashboard" className="text-muted-foreground hover:text-foreground transition-colors">
-                  Dashboard
+                <Link to="/how-it-works" className="text-muted-foreground hover:text-foreground transition-colors">
+                  How it works
                 </Link>
               </li>
             </ul>
@@ -61,8 +61,8 @@ export const Footer = () => {
             <h3 className="font-semibold mb-4">Support</h3>
             <ul className="space-y-2 text-sm">
               <li>
-                <Link to="/help" className="text-muted-foreground hover:text-foreground transition-colors">
-                  Help Center
+                <Link to="/support" className="text-muted-foreground hover:text-foreground transition-colors">
+                  Support
                 </Link>
               </li>
               <li>

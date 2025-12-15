@@ -29,8 +29,7 @@ const Pricing = () => {
       features: [
         "Everything in Pay As You Go",
         "10% discount on all numbers",
-        "Priority support",
-        "Full API access included",
+          "Priority support",
         "Bulk purchase discounts",
         "Advanced analytics",
         "Webhook notifications",

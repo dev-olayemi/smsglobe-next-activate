@@ -1,4 +1,4 @@
-import { supabase } from "@/integrations/supabase/client";
+import firestoreApi from "@/lib/firestoreApi";
 
 export interface Service {
   code: string;
@@ -24,53 +24,43 @@ export interface Activation {
 
 export const smsApi = {
   async getBalance() {
-    const { data, error } = await supabase.functions.invoke("sms-balance");
+    const { data, error } = await firestoreApi.invokeFunction("sms-balance");
     if (error) throw error;
     return data;
   },
 
   async getServices() {
-    const { data, error } = await supabase.functions.invoke("sms-services");
+    const { data, error } = await firestoreApi.invokeFunction("sms-services");
     if (error) throw error;
     return data as Service[];
   },
 
   async getCountries(service: string) {
-    const { data, error } = await supabase.functions.invoke("sms-countries", {
-      body: { service },
-    });
+    const { data, error } = await firestoreApi.invokeFunction("sms-countries", { service });
     if (error) throw error;
     return data as Country[];
   },
 
   async buyNumber(service: string, country: number, operator?: string) {
-    const { data, error } = await supabase.functions.invoke("sms-buy-number", {
-      body: { service, country, operator },
-    });
+    const { data, error } = await firestoreApi.invokeFunction("sms-buy-number", { service, country, operator });
     if (error) throw error;
     return data as Activation;
   },
 
   async getStatus(activationId: string) {
-    const { data, error } = await supabase.functions.invoke("sms-status", {
-      body: { activation_id: activationId },
-    });
+    const { data, error } = await firestoreApi.invokeFunction("sms-status", { activation_id: activationId });
     if (error) throw error;
     return data;
   },
 
   async cancelActivation(activationId: string) {
-    const { data, error } = await supabase.functions.invoke("sms-cancel", {
-      body: { activation_id: activationId },
-    });
+    const { data, error } = await firestoreApi.invokeFunction("sms-cancel", { activation_id: activationId });
     if (error) throw error;
     return data;
   },
 
   async setReady(activationId: string) {
-    const { data, error } = await supabase.functions.invoke("sms-set-ready", {
-      body: { activation_id: activationId },
-    });
+    const { data, error } = await firestoreApi.invokeFunction("sms-set-ready", { activation_id: activationId });
     if (error) throw error;
     return data;
   },

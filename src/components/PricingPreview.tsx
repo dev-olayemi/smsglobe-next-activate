@@ -24,10 +24,9 @@ export const PricingPreview = () => {
       description: "For regular users",
       features: [
         "Everything in Pay As You Go",
-        "10% discount on all numbers",
-        "Priority support",
-        "API access included",
-        "Bulk discounts",
+          "10% discount on all numbers",
+          "Priority support",
+          "Bulk discounts",
       ],
       cta: "Start Free Trial",
       popular: true,

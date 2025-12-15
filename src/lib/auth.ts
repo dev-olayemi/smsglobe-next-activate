@@ -1,44 +1,42 @@
-import { supabase } from "@/integrations/supabase/client";
-import { User, Session } from "@supabase/supabase-js";
-
-export interface AuthState {
-  user: User | null;
-  session: Session | null;
-}
+import { firebaseAuthService } from "./firebase-auth";
+import { sendPasswordResetEmail } from "firebase/auth";
+import { firebaseAuth } from "./firebase";
 
 export const auth = {
   async signUp(email: string, password: string) {
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        emailRedirectTo: `${window.location.origin}/`,
-      },
-    });
-    return { data, error };
+    return firebaseAuthService.signUp(email, password);
   },
 
   async signIn(email: string, password: string) {
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-    return { data, error };
+    return firebaseAuthService.signIn(email, password);
   },
 
   async signOut() {
-    const { error } = await supabase.auth.signOut();
-    return { error };
+    return firebaseAuthService.signOut();
   },
 
   async getSession() {
-    const { data, error } = await supabase.auth.getSession();
-    return { session: data.session, error };
+    const user = firebaseAuthService.getCurrentUser();
+    return { session: user ? { user } : null, error: null };
   },
 
-  onAuthStateChange(callback: (session: Session | null, user: User | null) => void) {
-    return supabase.auth.onAuthStateChange((event, session) => {
-      callback(session, session?.user ?? null);
+  onAuthStateChange(callback: (session: any | null, user: any | null) => void) {
+    return firebaseAuthService.onAuthStateChange((user) => {
+      const session = user ? { user } : null;
+      callback(session, user ?? null);
     });
+  },
+
+  async sendPasswordReset(email: string) {
+    try {
+      await sendPasswordResetEmail(firebaseAuth, email, { url: window.location.origin });
+      return { data: true, error: null };
+    } catch (error) {
+      return { data: null, error };
+    }
+  },
+
+  async signInWithGoogle() {
+    return firebaseAuthService.signInWithGoogle();
   },
 };

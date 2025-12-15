@@ -2,6 +2,7 @@ import {
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword,
   signInWithPopup,
+  signInWithRedirect,
   signOut,
   User
 } from "firebase/auth";
@@ -75,7 +76,14 @@ export const firebaseAuthService = {
       
       return { user, error: null };
     } catch (error: any) {
-      return { user: null, error: error.message };
+      // Popup may be blocked or network issues may prevent the popup flow.
+      // Fall back to redirect flow which uses the same Firebase auth handler.
+      try {
+        await signInWithRedirect(firebaseAuth, googleProvider);
+        return { user: null, error: null };
+      } catch (err: any) {
+        return { user: null, error: (err && err.message) || error?.message || 'Google sign-in failed' };
+      }
     }
   },
 

@@ -9,7 +9,7 @@ import { toast } from "sonner";
 import { useAuth } from "@/lib/auth-context";
 import { firestoreService } from "@/lib/firestore-service";
 import { getUsdToNgnRate, usdToNgn, formatCurrency } from "@/lib/currency";
-import { supabase } from "@/integrations/supabase/client";
+import firestoreApi from "@/lib/firestoreApi";
 
 interface TopUpModalProps {
   open: boolean;
@@ -87,16 +87,14 @@ export const TopUpModal = ({ open, onOpenChange, onSuccess }: TopUpModalProps) =
       });
 
       // Initialize Flutterwave payment via edge function
-      const { data, error } = await supabase.functions.invoke("flutterwave-initialize", {
-        body: { 
-          amount: ngnAmount, // Send NGN amount to Flutterwave
-          amountUSD: amountNum,
-          email: profile.email,
-          txRef: txRef,
-          userId: user.uid,
-          depositId: depositId,
-          currency: 'NGN',
-        },
+      const { data, error } = await firestoreApi.invokeFunction("flutterwave-initialize", {
+        amount: ngnAmount,
+        amountUSD: amountNum,
+        email: profile.email,
+        txRef: txRef,
+        userId: user.uid,
+        depositId: depositId,
+        currency: 'NGN',
       });
 
       if (error) throw error;

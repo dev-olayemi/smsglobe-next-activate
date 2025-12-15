@@ -5,6 +5,7 @@ import { TrustedBy } from "@/components/TrustedBy";
 import { PricingPreview } from "@/components/PricingPreview";
 import { FAQ } from "@/components/FAQ";
 import { Footer } from "@/components/Footer";
+import ProductList from '@/components/ProductList';
 
 const Index = () => {
   return (
@@ -12,6 +13,7 @@ const Index = () => {
       <Header />
       <main>
         <Hero />
+        <ProductList />
         <TrustedBy />
         <HowItWorks />
         <PricingPreview />

@@ -29,7 +29,7 @@ const About = () => {
               <li>Global coverage - 190+ countries available</li>
               <li>Reliable delivery - 99.9% SMS success rate</li>
               <li>Secure & private - your data is never shared</li>
-              <li>Developer-friendly API</li>
+              <li>Easy-to-use user dashboard (no public API access)</li>
               <li>24/7 customer support</li>
             </ul>
 

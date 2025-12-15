@@ -5,7 +5,7 @@ import { Footer } from "@/components/Footer";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Loader2, CheckCircle, XCircle } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import firestoreApi from "@/lib/firestoreApi";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/auth-context";
 import { firestoreService } from "@/lib/firestore-service";
@@ -43,13 +43,11 @@ const PaymentCallback = () => {
 
     try {
       // Verify payment with Flutterwave via edge function
-      const { data, error } = await supabase.functions.invoke("flutterwave-verify", {
-        body: { transaction_id: transactionId, tx_ref: txRef },
-      });
+      const { data, error } = await firestoreApi.invokeFunction("flutterwave-verify", { transaction_id: transactionId, tx_ref: txRef });
 
       if (error) throw error;
 
-      if (data.status === "success" && data.verified) {
+      if (data?.status === "success" && data.verified) {
         const paymentData = data.data;
         
         // Update Firebase with the payment
