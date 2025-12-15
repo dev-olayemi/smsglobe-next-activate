@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
@@ -8,16 +8,65 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
+import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/lib/auth-context";
-import { firestoreService } from "@/lib/firestore-service";
+import { firestoreService, ReferredUser } from "@/lib/firestore-service";
 import { toast } from "sonner";
-import { Loader2, User, Mail, Settings as SettingsIcon, Users, DollarSign, Copy } from "lucide-react";
+import { Loader2, User, Mail, Settings as SettingsIcon, Users, DollarSign, Copy, Check, X, AtSign } from "lucide-react";
 
 const Profile = () => {
   const navigate = useNavigate();
   const { user, profile, loading, refreshProfile } = useAuth();
   const [saving, setSaving] = useState(false);
   const [useCashbackFirst, setUseCashbackFirst] = useState(profile?.useCashbackFirst || false);
+  const [referredUsers, setReferredUsers] = useState<ReferredUser[]>([]);
+  const [loadingReferrals, setLoadingReferrals] = useState(false);
+  const [username, setUsername] = useState(profile?.username || "");
+  const [savingUsername, setSavingUsername] = useState(false);
+  const [usernameAvailable, setUsernameAvailable] = useState<boolean | null>(null);
+  const [checkingUsername, setCheckingUsername] = useState(false);
+
+  useEffect(() => {
+    if (profile?.username) {
+      setUsername(profile.username);
+    }
+  }, [profile]);
+
+  useEffect(() => {
+    if (user) {
+      loadReferredUsers();
+    }
+  }, [user]);
+
+  // Check username availability
+  useEffect(() => {
+    if (!username || username === profile?.username || username.length < 3) {
+      setUsernameAvailable(null);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      setCheckingUsername(true);
+      const available = await firestoreService.checkUsernameAvailable(username);
+      setUsernameAvailable(available);
+      setCheckingUsername(false);
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [username, profile?.username]);
+
+  const loadReferredUsers = async () => {
+    if (!user) return;
+    setLoadingReferrals(true);
+    try {
+      const users = await firestoreService.getReferredUsers(user.uid);
+      setReferredUsers(users);
+    } catch (error) {
+      console.error("Error loading referrals:", error);
+    } finally {
+      setLoadingReferrals(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -50,6 +99,29 @@ const Profile = () => {
     }
   };
 
+  const handleSaveUsername = async () => {
+    if (!username || username === profile?.username) return;
+    if (usernameAvailable === false) {
+      toast.error("Username is not available");
+      return;
+    }
+
+    setSavingUsername(true);
+    try {
+      const result = await firestoreService.setUsername(user.uid, username);
+      if (result.success) {
+        await refreshProfile();
+        toast.success("Username saved successfully");
+      } else {
+        toast.error(result.error || "Failed to save username");
+      }
+    } catch (error) {
+      console.error("Error saving username:", error);
+      toast.error("Failed to save username");
+    } finally {
+      setSavingUsername(false);
+    }
+  };
 
   const copyReferralLink = () => {
     const referralUrl = `${window.location.origin}/signup?ref=${referralCode}`;
@@ -60,6 +132,12 @@ const Profile = () => {
   const copyReferralCodeOnly = () => {
     navigator.clipboard.writeText(referralCode);
     toast.success("Referral code copied!");
+  };
+
+  const formatDate = (timestamp: any) => {
+    if (!timestamp) return 'N/A';
+    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+    return date.toLocaleDateString();
   };
 
   return (
@@ -75,6 +153,75 @@ const Profile = () => {
           </div>
 
           <div className="grid gap-6">
+            {/* Account Information with Username */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <User className="h-5 w-5" />
+                  Account Information
+                </CardTitle>
+                <CardDescription>Your basic account details</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="email">Email Address</Label>
+                  <div className="flex items-center gap-2">
+                    <Mail className="h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="email"
+                      type="email"
+                      value={user.email || ""}
+                      disabled
+                      className="flex-1"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="username">Username</Label>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <div className="relative flex-1">
+                      <AtSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        id="username"
+                        type="text"
+                        placeholder="Choose a username"
+                        value={username}
+                        onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
+                        className={`pl-9 pr-10 ${usernameAvailable === true ? 'border-green-500' : usernameAvailable === false ? 'border-destructive' : ''}`}
+                      />
+                      <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                        {checkingUsername && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+                        {!checkingUsername && usernameAvailable === true && <Check className="h-4 w-4 text-green-500" />}
+                        {!checkingUsername && usernameAvailable === false && <X className="h-4 w-4 text-destructive" />}
+                      </div>
+                    </div>
+                    <Button 
+                      onClick={handleSaveUsername} 
+                      disabled={savingUsername || !username || username === profile?.username || usernameAvailable === false}
+                      className="shrink-0"
+                    >
+                      {savingUsername ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
+                    </Button>
+                  </div>
+                  {usernameAvailable === false && (
+                    <p className="text-xs text-destructive">Username is already taken</p>
+                  )}
+                  {profile?.username && (
+                    <p className="text-xs text-muted-foreground">
+                      You can login with: <span className="font-medium">{profile.username}</span>
+                    </p>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <Label>User ID</Label>
+                  <Input value={user.uid} disabled />
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Referral Program with Users List */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -136,49 +283,48 @@ const Profile = () => {
                       </Button>
                     </div>
                   </div>
+                </div>
 
-                  <div className="bg-muted p-4 rounded-lg">
-                    <p className="text-sm">
-                      <strong>How it works:</strong> Share your referral code or link with friends. 
-                      When they sign up using your code, you'll automatically receive $1.00 bonus 
-                      added to your balance!
-                    </p>
-                  </div>
+                {/* Referred Users List */}
+                {referralCount > 0 && (
+                  <>
+                    <Separator />
+                    <div className="space-y-3">
+                      <h4 className="font-medium">Users who used your code</h4>
+                      {loadingReferrals ? (
+                        <div className="flex justify-center py-4">
+                          <Loader2 className="h-6 w-6 animate-spin" />
+                        </div>
+                      ) : (
+                        <div className="space-y-2 max-h-48 overflow-y-auto">
+                          {referredUsers.map((refUser) => (
+                            <div key={refUser.id} className="flex items-center justify-between p-3 bg-muted rounded-lg">
+                              <div>
+                                <p className="font-medium text-sm">
+                                  {refUser.username ? `@${refUser.username}` : refUser.email}
+                                </p>
+                                <p className="text-xs text-muted-foreground">
+                                  Joined {formatDate(refUser.createdAt)}
+                                </p>
+                              </div>
+                              <Badge variant="secondary">+$1.00</Badge>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
+
+                <div className="bg-muted p-4 rounded-lg">
+                  <p className="text-sm">
+                    <strong>How it works:</strong> Share your referral code or link with friends. 
+                    When they sign up using your code, you'll automatically receive $1.00 bonus 
+                    added to your balance!
+                  </p>
                 </div>
               </CardContent>
             </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <User className="h-5 w-5" />
-                  Account Information
-                </CardTitle>
-                <CardDescription>Your basic account details</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="email">Email Address</Label>
-                  <div className="flex items-center gap-2">
-                    <Mail className="h-4 w-4 text-muted-foreground" />
-                    <Input
-                      id="email"
-                      type="email"
-                      value={user.email || ""}
-                      disabled
-                      className="flex-1"
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label>User ID</Label>
-                  <Input value={user.uid} disabled />
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* API access removed - product is user-facing only */}
 
             <Card>
               <CardHeader>

@@ -7,12 +7,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { toast } from "sonner";
 import { firebaseAuthService } from "@/lib/firebase-auth";
 import { firestoreService } from "@/lib/firestore-service";
-import { Loader2 } from "lucide-react";
+import { Loader2, Check, X } from "lucide-react";
 import logo from "@/assets/logo.png";
 import { z } from "zod";
 
 const signupSchema = z.object({
   email: z.string().email("Invalid email address"),
+  username: z.string().min(3, "Username must be at least 3 characters").max(20, "Username max 20 characters").regex(/^[a-zA-Z0-9_]+$/, "Only letters, numbers, and underscores"),
   password: z.string().min(6, "Password must be at least 6 characters"),
   confirmPassword: z.string(),
 }).refine((data) => data.password === data.confirmPassword, {
@@ -23,20 +24,22 @@ const signupSchema = z.object({
 const Signup = () => {
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [referralCode, setReferralCode] = useState("");
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [usernameAvailable, setUsernameAvailable] = useState<boolean | null>(null);
+  const [checkingUsername, setCheckingUsername] = useState(false);
+  const [usernameSuggestions, setUsernameSuggestions] = useState<string[]>([]);
 
   useEffect(() => {
-    // Check if user is already logged in
     const user = firebaseAuthService.getCurrentUser();
     if (user) {
       navigate("/dashboard");
     }
     
-    // Check for referral code in URL
     const params = new URLSearchParams(window.location.search);
     const refCode = params.get('ref');
     if (refCode) {
@@ -44,19 +47,43 @@ const Signup = () => {
     }
   }, [navigate]);
 
+  // Check username availability with debounce
+  useEffect(() => {
+    if (username.length < 3) {
+      setUsernameAvailable(null);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      setCheckingUsername(true);
+      const available = await firestoreService.checkUsernameAvailable(username);
+      setUsernameAvailable(available);
+      setCheckingUsername(false);
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [username]);
+
+  // Generate username suggestions when email changes
+  useEffect(() => {
+    if (email && email.includes('@')) {
+      const suggestions = firestoreService.generateUsernameSuggestions(email);
+      setUsernameSuggestions(suggestions);
+    }
+  }, [email]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     try {
-      const validated = signupSchema.parse({ email, password, confirmPassword });
+      const validated = signupSchema.parse({ email, username, password, confirmPassword });
       setLoading(true);
 
-      const { user, error } = await firebaseAuthService.signUp(validated.email, validated.password);
+      const { user, error } = await firebaseAuthService.signUp(validated.email, validated.password, validated.username);
 
       if (error) {
         toast.error(error);
       } else if (user) {
-        // Apply referral bonus if code provided
         if (referralCode.trim()) {
           try {
             const success = await firestoreService.applyReferralCode(user.uid, referralCode.trim().toUpperCase());
@@ -94,7 +121,6 @@ const Signup = () => {
       if (error) {
         toast.error(error);
       } else if (user) {
-        // Apply referral code if provided
         if (referralCode.trim()) {
           try {
             await firestoreService.applyReferralCode(user.uid, referralCode.trim().toUpperCase());
@@ -177,6 +203,45 @@ const Signup = () => {
                 required
               />
             </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="username">Username</Label>
+              <div className="relative">
+                <Input
+                  id="username"
+                  type="text"
+                  placeholder="Choose a username"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
+                  required
+                  className={`pr-10 ${usernameAvailable === true ? 'border-green-500' : usernameAvailable === false ? 'border-destructive' : ''}`}
+                />
+                <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                  {checkingUsername && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+                  {!checkingUsername && usernameAvailable === true && <Check className="h-4 w-4 text-green-500" />}
+                  {!checkingUsername && usernameAvailable === false && <X className="h-4 w-4 text-destructive" />}
+                </div>
+              </div>
+              {usernameAvailable === false && (
+                <p className="text-xs text-destructive">Username is already taken</p>
+              )}
+              {usernameSuggestions.length > 0 && !username && (
+                <div className="flex flex-wrap gap-2 mt-2">
+                  <span className="text-xs text-muted-foreground">Suggestions:</span>
+                  {usernameSuggestions.slice(0, 3).map((suggestion) => (
+                    <button
+                      key={suggestion}
+                      type="button"
+                      onClick={() => setUsername(suggestion)}
+                      className="text-xs text-primary hover:underline"
+                    >
+                      {suggestion}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
             <div className="space-y-2">
               <Label htmlFor="password">Password</Label>
               <Input
@@ -214,7 +279,7 @@ const Signup = () => {
                 Have a referral code? Your referrer will get $1 bonus!
               </p>
             </div>
-            <Button type="submit" className="w-full" disabled={loading}>
+            <Button type="submit" className="w-full" disabled={loading || usernameAvailable === false}>
               {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Create Account
             </Button>

@@ -11,19 +11,18 @@ import logo from "@/assets/logo.png";
 import { z } from "zod";
 
 const loginSchema = z.object({
-  email: z.string().email("Invalid email address"),
+  identifier: z.string().min(3, "Email or username is required"),
   password: z.string().min(6, "Password must be at least 6 characters"),
 });
 
 const Login = () => {
   const navigate = useNavigate();
-  const [email, setEmail] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
 
   useEffect(() => {
-    // Check if user is already logged in
     const user = firebaseAuthService.getCurrentUser();
     if (user) {
       navigate("/dashboard");
@@ -34,10 +33,10 @@ const Login = () => {
     e.preventDefault();
     
     try {
-      const validated = loginSchema.parse({ email, password });
+      const validated = loginSchema.parse({ identifier, password });
       setLoading(true);
 
-      const { user, error } = await firebaseAuthService.signIn(validated.email, validated.password);
+      const { user, error } = await firebaseAuthService.signIn(validated.identifier, validated.password);
 
       if (error) {
         toast.error(error);
@@ -129,13 +128,13 @@ const Login = () => {
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="identifier">Email or Username</Label>
               <Input
-                id="email"
-                type="email"
-                placeholder="you@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                id="identifier"
+                type="text"
+                placeholder="you@example.com or username"
+                value={identifier}
+                onChange={(e) => setIdentifier(e.target.value)}
                 required
               />
             </div>

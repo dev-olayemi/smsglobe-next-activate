@@ -9,6 +9,7 @@ import {
   orderBy, 
   getDocs,
   addDoc,
+  deleteDoc,
   serverTimestamp,
   Timestamp
 } from "firebase/firestore";
@@ -18,6 +19,7 @@ import { db } from "./firebase";
 export interface UserProfile {
   id: string;
   email: string;
+  username?: string;
   displayName?: string;
   photoURL?: string;
   balance: number;
@@ -30,6 +32,14 @@ export interface UserProfile {
   apiKey?: string;
   createdAt: Timestamp;
   updatedAt: Timestamp;
+}
+
+// Referred User (for referral list)
+export interface ReferredUser {
+  id: string;
+  email: string;
+  username?: string;
+  createdAt: Timestamp;
 }
 
 // Balance Transaction
@@ -73,6 +83,43 @@ export interface Deposit {
   completedAt?: Timestamp;
 }
 
+// Product Category Types
+export type ProductCategory = 'esim' | 'proxy' | 'vpn' | 'rdp' | 'gift';
+
+// Product Listing (admin-managed)
+export interface ProductListing {
+  id: string;
+  category: ProductCategory;
+  name: string;
+  description: string;
+  price: number;
+  features: string[];
+  duration?: string; // e.g., "30 days", "1 month"
+  region?: string;
+  stock?: number;
+  isActive: boolean;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
+// Product Order
+export interface ProductOrder {
+  id: string;
+  userId: string;
+  userEmail: string;
+  username?: string;
+  productId: string;
+  productName: string;
+  category: ProductCategory;
+  price: number;
+  status: 'pending' | 'processing' | 'completed' | 'cancelled' | 'refunded';
+  deliveryDetails?: string; // Admin fills this with VPN credentials, eSIM details, etc.
+  adminNotes?: string;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+  completedAt?: Timestamp;
+}
+
 export const firestoreService = {
   // ===== USER PROFILE =====
   async getUserProfile(userId: string): Promise<UserProfile | null> {
@@ -99,6 +146,76 @@ export const firestoreService = {
       balance: newBalance,
       updatedAt: serverTimestamp()
     });
+  },
+
+  // ===== USERNAME FUNCTIONS =====
+  async checkUsernameAvailable(username: string): Promise<boolean> {
+    const colRef = collection(db, "users");
+    const q = query(colRef, where("username", "==", username.toLowerCase()));
+    const snapshot = await getDocs(q);
+    return snapshot.empty;
+  },
+
+  async setUsername(userId: string, username: string): Promise<{ success: boolean; error?: string }> {
+    const isAvailable = await this.checkUsernameAvailable(username);
+    if (!isAvailable) {
+      return { success: false, error: "Username is already taken" };
+    }
+    
+    await this.updateUserProfile(userId, { username: username.toLowerCase() });
+    return { success: true };
+  },
+
+  async getUserByUsername(username: string): Promise<UserProfile | null> {
+    const colRef = collection(db, "users");
+    const q = query(colRef, where("username", "==", username.toLowerCase()));
+    const snapshot = await getDocs(q);
+    
+    if (!snapshot.empty) {
+      const docSnap = snapshot.docs[0];
+      return { id: docSnap.id, ...docSnap.data() } as UserProfile;
+    }
+    return null;
+  },
+
+  async getUserByEmail(email: string): Promise<UserProfile | null> {
+    const colRef = collection(db, "users");
+    const q = query(colRef, where("email", "==", email.toLowerCase()));
+    const snapshot = await getDocs(q);
+    
+    if (!snapshot.empty) {
+      const docSnap = snapshot.docs[0];
+      return { id: docSnap.id, ...docSnap.data() } as UserProfile;
+    }
+    return null;
+  },
+
+  generateUsernameSuggestions(email: string, displayName?: string): string[] {
+    const suggestions: string[] = [];
+    const baseNames: string[] = [];
+    
+    // Extract from email
+    const emailBase = email.split('@')[0].replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+    if (emailBase.length >= 3) baseNames.push(emailBase);
+    
+    // Extract from display name
+    if (displayName) {
+      const nameBase = displayName.replace(/\s+/g, '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+      if (nameBase.length >= 3) baseNames.push(nameBase);
+      
+      // First name only
+      const firstName = displayName.split(' ')[0].replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+      if (firstName.length >= 3) baseNames.push(firstName);
+    }
+    
+    // Generate suggestions with numbers
+    baseNames.forEach(base => {
+      suggestions.push(base);
+      suggestions.push(`${base}${Math.floor(Math.random() * 999)}`);
+      suggestions.push(`${base}_${Math.floor(Math.random() * 99)}`);
+    });
+    
+    return [...new Set(suggestions)].slice(0, 5);
   },
 
   // ===== BALANCE TRANSACTIONS =====
@@ -152,7 +269,7 @@ export const firestoreService = {
     });
   },
 
-// ===== DEPOSITS =====
+  // ===== DEPOSITS =====
   async createDeposit(deposit: Omit<Deposit, 'id' | 'createdAt'>) {
     const colRef = collection(db, "deposits");
     const docRef = await addDoc(colRef, {
@@ -192,23 +309,19 @@ export const firestoreService = {
 
   // ===== COMPLETE DEPOSIT (after payment verification) =====
   async completeDeposit(depositId: string, userId: string, amountUSD: number, transactionId: string) {
-    // Get current user profile
     const profile = await this.getUserProfile(userId);
     if (!profile) throw new Error('User profile not found');
 
     const newBalance = (profile.balance || 0) + amountUSD;
 
-    // Update deposit status
     await this.updateDeposit(depositId, {
       status: 'completed',
       transactionId,
       completedAt: serverTimestamp() as Timestamp
     });
 
-    // Update user balance
     await this.updateUserBalance(userId, newBalance);
 
-    // Add transaction record
     await this.addBalanceTransaction({
       userId,
       type: 'deposit',
@@ -222,7 +335,6 @@ export const firestoreService = {
 
   // ===== REFERRALS =====
   async applyReferralCode(userId: string, referralCode: string): Promise<boolean> {
-    // Find user with this referral code
     const colRef = collection(db, "users");
     const q = query(colRef, where("referralCode", "==", referralCode));
     const snapshot = await getDocs(q);
@@ -234,18 +346,15 @@ export const firestoreService = {
     const referrer = snapshot.docs[0];
     const referrerId = referrer.id;
     
-    // Don't allow self-referral
     if (referrerId === userId) {
       return false;
     }
     
-    // Update current user's referredBy
     await this.updateUserProfile(userId, { referredBy: referrerId });
     
-    // Update referrer's stats and give bonus
     const referrerData = referrer.data();
     const newReferralCount = (referrerData.referralCount || 0) + 1;
-    const bonusAmount = 1; // $1 bonus
+    const bonusAmount = 1;
     const newReferralEarnings = (referrerData.referralEarnings || 0) + bonusAmount;
     const newBalance = (referrerData.balance || 0) + bonusAmount;
     
@@ -256,7 +365,6 @@ export const firestoreService = {
       updatedAt: serverTimestamp()
     });
     
-    // Add balance transaction for referrer
     await this.addBalanceTransaction({
       userId: referrerId,
       type: 'referral_bonus',
@@ -266,5 +374,161 @@ export const firestoreService = {
     });
     
     return true;
+  },
+
+  async getReferredUsers(userId: string): Promise<ReferredUser[]> {
+    const colRef = collection(db, "users");
+    const q = query(colRef, where("referredBy", "==", userId));
+    const snapshot = await getDocs(q);
+    
+    return snapshot.docs.map(docSnap => {
+      const data = docSnap.data();
+      return {
+        id: docSnap.id,
+        email: data.email || '',
+        username: data.username,
+        createdAt: data.createdAt
+      } as ReferredUser;
+    });
+  },
+
+  // ===== PRODUCT LISTINGS (Admin managed) =====
+  async getProductListings(category?: ProductCategory): Promise<ProductListing[]> {
+    const colRef = collection(db, "product_listings");
+    let q;
+    
+    if (category) {
+      q = query(colRef, where("category", "==", category), where("isActive", "==", true), orderBy("createdAt", "desc"));
+    } else {
+      q = query(colRef, where("isActive", "==", true), orderBy("createdAt", "desc"));
+    }
+    
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ProductListing));
+  },
+
+  async getAllProductListings(): Promise<ProductListing[]> {
+    const colRef = collection(db, "product_listings");
+    const q = query(colRef, orderBy("createdAt", "desc"));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ProductListing));
+  },
+
+  async getProductById(productId: string): Promise<ProductListing | null> {
+    const docRef = doc(db, "product_listings", productId);
+    const docSnap = await getDoc(docRef);
+    
+    if (docSnap.exists()) {
+      return { id: docSnap.id, ...docSnap.data() } as ProductListing;
+    }
+    return null;
+  },
+
+  async createProductListing(product: Omit<ProductListing, 'id' | 'createdAt' | 'updatedAt'>) {
+    const colRef = collection(db, "product_listings");
+    const docRef = await addDoc(colRef, {
+      ...product,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    });
+    return docRef.id;
+  },
+
+  async updateProductListing(productId: string, data: Partial<ProductListing>) {
+    const docRef = doc(db, "product_listings", productId);
+    await updateDoc(docRef, {
+      ...data,
+      updatedAt: serverTimestamp()
+    });
+  },
+
+  async deleteProductListing(productId: string) {
+    const docRef = doc(db, "product_listings", productId);
+    await deleteDoc(docRef);
+  },
+
+  // ===== PRODUCT ORDERS =====
+  async createProductOrder(order: Omit<ProductOrder, 'id' | 'createdAt' | 'updatedAt'>) {
+    const colRef = collection(db, "product_orders");
+    const docRef = await addDoc(colRef, {
+      ...order,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    });
+    return docRef.id;
+  },
+
+  async getUserProductOrders(userId: string): Promise<ProductOrder[]> {
+    const colRef = collection(db, "product_orders");
+    const q = query(colRef, where("userId", "==", userId), orderBy("createdAt", "desc"));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ProductOrder));
+  },
+
+  async getAllProductOrders(): Promise<ProductOrder[]> {
+    const colRef = collection(db, "product_orders");
+    const q = query(colRef, orderBy("createdAt", "desc"));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ProductOrder));
+  },
+
+  async getProductOrderById(orderId: string): Promise<ProductOrder | null> {
+    const docRef = doc(db, "product_orders", orderId);
+    const docSnap = await getDoc(docRef);
+    
+    if (docSnap.exists()) {
+      return { id: docSnap.id, ...docSnap.data() } as ProductOrder;
+    }
+    return null;
+  },
+
+  async updateProductOrder(orderId: string, data: Partial<ProductOrder>) {
+    const docRef = doc(db, "product_orders", orderId);
+    await updateDoc(docRef, {
+      ...data,
+      updatedAt: serverTimestamp()
+    });
+  },
+
+  // ===== PURCHASE PRODUCT =====
+  async purchaseProduct(userId: string, productId: string): Promise<{ success: boolean; orderId?: string; error?: string }> {
+    const profile = await this.getUserProfile(userId);
+    if (!profile) return { success: false, error: "User not found" };
+    
+    const product = await this.getProductById(productId);
+    if (!product) return { success: false, error: "Product not found" };
+    if (!product.isActive) return { success: false, error: "Product is not available" };
+    
+    if (profile.balance < product.price) {
+      return { success: false, error: "Insufficient balance" };
+    }
+    
+    const newBalance = profile.balance - product.price;
+    
+    // Create order
+    const orderId = await this.createProductOrder({
+      userId,
+      userEmail: profile.email,
+      username: profile.username,
+      productId,
+      productName: product.name,
+      category: product.category,
+      price: product.price,
+      status: 'pending'
+    });
+    
+    // Deduct balance
+    await this.updateUserBalance(userId, newBalance);
+    
+    // Record transaction
+    await this.addBalanceTransaction({
+      userId,
+      type: 'purchase',
+      amount: -product.price,
+      description: `Purchase: ${product.name}`,
+      balanceAfter: newBalance
+    });
+    
+    return { success: true, orderId };
   }
 };
