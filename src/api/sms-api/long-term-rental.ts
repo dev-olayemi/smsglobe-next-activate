@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { callTellabotAPI, checkUserBalance, deductFromBalance, LTRRentResult, LTRStatusResult } from "./utils";
 import { firestoreService } from "@/lib/firestore-service";
 

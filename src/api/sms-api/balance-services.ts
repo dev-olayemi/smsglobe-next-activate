@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { callTellabotAPI, SMSService, TellabotResponse } from "./utils";
 
 // Balance & Services API
