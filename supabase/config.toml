@@ -1,1 +1,7 @@
 project_id = "cvcprxarfiiokkjjjkls"
+
+[functions.flutterwave-initialize]
+verify_jwt = false
+
+[functions.flutterwave-verify]
+verify_jwt = false
