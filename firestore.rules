@@ -39,8 +39,6 @@ service cloud.firestore {
     // ===== REFERRAL SYSTEM =====
     match /refers/{referId} {
       allow read: if true;
-      // Only allow creation via server-side logic or tighten if client-side
-      // Current: any auth user can create – consider moving to Cloud Function
       allow create: if isOwner(incomingData().userId)
                     && incomingData().keys().hasAll(['userId', 'referrerId', 'commission'])
                     && incomingData().commission is number
@@ -56,9 +54,7 @@ service cloud.firestore {
                     && incomingData().status == "pending";
       allow update: if (isOwner(resource.data.userId) || isAdmin())
                     && (
-                         // Only admins can change anything freely
                          isAdmin() ||
-                         // Users/admins can only move pending → completed
                          (existingData().status == "pending" && incomingData().status == "completed")
                        );
       allow delete: if isAdmin();
@@ -76,12 +72,16 @@ service cloud.firestore {
 
     // ===== PAYMENT HISTORIES =====
     match /crypto_payment_history/{docId} {
-      allow read, create, update: if isOwner(resource.data.userId) || isAdmin();
+      // For read/update, check existing doc owner
+      allow read, update: if isOwner(resource.data.userId) || isAdmin();
+      // For create, check incoming data owner
+      allow create: if isOwner(incomingData().userId) || isAdmin();
       allow delete: if isAdmin();
     }
 
     match /deposit_history/{docId} {
-      allow read, create, update: if isOwner(resource.data.userId) || isAdmin();
+      allow read, update: if isOwner(resource.data.userId) || isAdmin();
+      allow create: if isOwner(incomingData().userId) || isAdmin();
       allow delete: if isAdmin();
     }
 
@@ -96,7 +96,8 @@ service cloud.firestore {
     // ===== TRANSACTIONS (general) =====
     match /transactions/{docId} {
       allow read: if isOwner(resource.data.userId) || isAdmin();
-      allow create, update: if isOwner(incomingData().userId) || isAdmin();
+      allow create: if isOwner(incomingData().userId) || isAdmin();
+      allow update: if isOwner(resource.data.userId) || isAdmin();
       allow delete: if isAdmin();
     }
 
