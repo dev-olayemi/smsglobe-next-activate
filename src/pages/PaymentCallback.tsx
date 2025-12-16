@@ -134,8 +134,16 @@ const PaymentCallback = () => {
                     </div>
                   )}
                 </div>
-                <Button onClick={() => navigate("/dashboard")} className="w-full">
-                  Go to Dashboard
+                <Button onClick={() => {
+                  const redirectPath = localStorage.getItem('post_auth_redirect');
+                  if (redirectPath) {
+                    localStorage.removeItem('post_auth_redirect');
+                    navigate(redirectPath);
+                  } else {
+                    navigate("/dashboard");
+                  }
+                }} className="w-full">
+                  Continue
                 </Button>
               </div>
             )}

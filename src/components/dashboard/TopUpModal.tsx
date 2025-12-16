@@ -100,14 +100,26 @@ export const TopUpModal = ({ open, onOpenChange, onSuccess }: TopUpModalProps) =
       if (error) throw error;
 
       if (data?.payment_link) {
-        toast.success("Redirecting to payment gateway...");
-        window.location.href = data.payment_link;
+        toast.success("Opening payment gateway in a new tab...");
+        // open in new tab so user can return to app easily
+        window.open(data.payment_link, "_blank");
+        // Close the modal after opening payment
+        onOpenChange(false);
+        onSuccess();
       } else {
         throw new Error("No payment link received");
       }
     } catch (error) {
       console.error("Top up error:", error);
-      toast.error("Failed to initiate payment. Please try again.");
+      // If the error comes from invokeFunction it may include helpful details
+      const err = error as any;
+      if (err && err.url) {
+        toast.error(`Failed to contact payment endpoint (${err.url}). Check emulator or functions deployment.`);
+      } else if (err && err.message) {
+        toast.error(err.message);
+      } else {
+        toast.error("Failed to initiate payment. Please try again.");
+      }
     } finally {
       setLoading(false);
     }

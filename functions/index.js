@@ -16,8 +16,78 @@ const admin = require("firebase-admin");
 const express = require("express");
 const cors = require("cors");
 const fetch = require("node-fetch");
+const axios = require("axios");
 
-admin.initializeApp();
+// --- Flutterwave token manager ---
+let accessToken = null;
+let expiresIn = 0; // seconds
+let lastTokenRefreshTime = 0; // ms since epoch
+
+const FLW_CLIENT_ID = process.env.FLW_CLIENT_ID || process.env.NEXT_PUBLIC_FLW_PUBLIC_KEY || process.env.VITE_PUBLIC_FLW_PUBLIC_KEY || null;
+const FLW_CLIENT_SECRET = process.env.FLW_CLIENT_SECRET || process.env.FLW_SECRET_KEY || null;
+
+async function refreshToken() {
+  try {
+    if (!FLW_CLIENT_ID || !FLW_CLIENT_SECRET) {
+      console.warn('Flutterwave client id/secret not configured for token refresh');
+      return;
+    }
+
+    const resp = await axios.post(
+      'https://idp.flutterwave.com/realms/flutterwave/protocol/openid-connect/token',
+      new URLSearchParams({
+        client_id: FLW_CLIENT_ID,
+        client_secret: FLW_CLIENT_SECRET,
+        grant_type: 'client_credentials'
+      }).toString(),
+      { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
+    );
+
+    accessToken = resp.data.access_token;
+    expiresIn = resp.data.expires_in || 0;
+    lastTokenRefreshTime = Date.now();
+    console.log('Flutterwave token refreshed, expires in', expiresIn, 'seconds');
+  } catch (err) {
+    console.error('Error refreshing Flutterwave token:', err?.response?.data || err.message || err);
+  }
+}
+
+async function ensureTokenIsValid() {
+  const now = Date.now();
+  const elapsed = (now - lastTokenRefreshTime) / 1000; // seconds
+  const timeLeft = expiresIn - elapsed;
+  if (!accessToken || timeLeft < 60) {
+    await refreshToken();
+  }
+}
+
+// Periodically refresh token (best-effort, instance-scoped)
+setInterval(() => {
+  try { ensureTokenIsValid(); } catch (e) { /* ignore */ }
+}, 30 * 1000); 
+
+// Initialize Firebase Admin SDK.
+// If a service account JSON is present in the repository root (deemax-3223e-firebase-adminsdk-*.json),
+// use it for local admin initialization so you can run admin operations locally.
+try {
+  const path = require("path");
+  const fs = require("fs");
+  const svcPath = path.resolve(__dirname, "..", "deemax-3223e-firebase-adminsdk-qg4o1-cbfae26480.json");
+  if (fs.existsSync(svcPath)) {
+    const serviceAccount = require(svcPath);
+    admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount),
+      // databaseURL: `https://${serviceAccount.project_id}.firebaseio.com`,
+    });
+    console.log("Firebase Admin initialized with service account from:", svcPath);
+  } else {
+    admin.initializeApp();
+    console.log("Firebase Admin initialized with default credentials");
+  }
+} catch (err) {
+  console.warn("Failed to initialize admin with service account, falling back to default initialization.", err);
+  try { admin.initializeApp(); } catch (e) { /* ignore */ }
+}
 const db = admin.firestore();
 
 const app = express();
@@ -55,10 +125,14 @@ app.post("/flutterwave-initialize", async (req, res) => {
     };
 
     // Call Flutterwave Payments API
+    // Ensure we have a fresh token where possible
+    await ensureTokenIsValid();
+    const bearer = accessToken || FLW_SECRET;
+
     const fwRes = await fetch("https://api.flutterwave.com/v3/payments", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${FLW_SECRET}`,
+        Authorization: bearer ? `Bearer ${bearer}` : undefined,
         "Content-Type": "application/json",
       },
       body: JSON.stringify(payload),
@@ -99,10 +173,14 @@ app.post("/flutterwave-verify", async (req, res) => {
       return res.status(400).json({ error: "missing_transaction_identifier" });
     }
 
+    // Ensure token is valid
+    await ensureTokenIsValid();
+    const bearer = accessToken || FLW_SECRET;
+
     const fwRes = await fetch(verifyUrl, {
       method: "GET",
       headers: {
-        Authorization: `Bearer ${FLW_SECRET}`,
+        Authorization: bearer ? `Bearer ${bearer}` : undefined,
       },
     });
 

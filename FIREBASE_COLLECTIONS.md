@@ -120,3 +120,23 @@ Application settings (admin managed).
 3. Amount is converted to NGN for Flutterwave payment
 4. After successful payment, USD amount is credited to balance
 5. Both USD and NGN amounts are stored in deposit record
+
+---
+
+### `services`
+Repository of available services (SMS numbers, eSIMs, VPN, proxies, etc.) used to populate product listings and marketplace pages.
+
+### `product_listings`
+Admin-managed product definitions used in the public marketplace (cards, images, price, region, duration, isActive, etc.)
+
+### `product_orders`
+Orders placed by users when they purchase a product listing. Admins fulfill orders and can add `deliveryDetails` (VPN credentials, eSIM QR, etc.).
+
+### `admin-auth-email`
+Optional allow-list collection or single-document config that contains emails allowed to become admin accounts (for onboarding / manual creation). Alternatively the app may keep an `isAdmin` flag on the `users` document.
+
+### `support_conversations` / `support_messages`
+Collections for in-app support messages and conversation threads between users and support staff.
+
+### `users` (note)
+We also recommend keeping an `isAdmin` boolean on `users/{uid}` for quick checks; the allow-list can be used during initial onboarding to grant that flag only to approved emails.

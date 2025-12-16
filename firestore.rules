@@ -1,0 +1,123 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===== HELPER FUNCTIONS =====
+    function isOwner(userId) {
+      return request.auth != null && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return request.auth != null && request.auth.token.admin == true;
+    }
+
+    function incomingData() {
+      return request.resource.data;
+    }
+
+    function existingData() {
+      return resource.data;
+    }
+
+    // ===== PRODUCT LISTINGS (Public read, admin only write) =====
+    match /product_listings/{docId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    // ===== USERS =====
+    match /users/{userId} {
+      allow read: if true; // Public profiles
+      allow create: if isOwner(userId);
+      allow update: if isOwner(userId) || isAdmin()
+                    && (!existingData().keys().hasAny(['balance']) || // if balance exists
+                        incomingData().balance >= existingData().balance || // users can only increase
+                        isAdmin());
+      allow delete: if isAdmin();
+    }
+
+    // ===== REFERRAL SYSTEM =====
+    match /refers/{referId} {
+      allow read: if true;
+      // Only allow creation via server-side logic or tighten if client-side
+      // Current: any auth user can create – consider moving to Cloud Function
+      allow create: if isOwner(incomingData().userId)
+                    && incomingData().keys().hasAll(['userId', 'referrerId', 'commission'])
+                    && incomingData().commission is number
+                    && incomingData().commission > 0;
+      allow update, delete: if isAdmin();
+    }
+
+    // ===== USER DEPOSITS =====
+    match /userDeposits/{docId} {
+      allow read: if isOwner(resource.data.userId) || isAdmin();
+      allow create: if isOwner(incomingData().userId)
+                    && incomingData().amount > 0
+                    && incomingData().status == "pending";
+      allow update: if (isOwner(resource.data.userId) || isAdmin())
+                    && (
+                         // Only admins can change anything freely
+                         isAdmin() ||
+                         // Users/admins can only move pending → completed
+                         (existingData().status == "pending" && incomingData().status == "completed")
+                       );
+      allow delete: if isAdmin();
+    }
+
+    // ===== ORDERS =====
+    match /orders/{docId} {
+      allow read: if isOwner(resource.data.userId) || isAdmin();
+      allow create: if isOwner(incomingData().userId)
+                    && incomingData().keys().hasAll(['userId', 'amount', 'status', 'productId'])
+                    && incomingData().amount > 0;
+      allow update: if isOwner(resource.data.userId) || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // ===== PAYMENT HISTORIES =====
+    match /crypto_payment_history/{docId} {
+      allow read, create, update: if isOwner(resource.data.userId) || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /deposit_history/{docId} {
+      allow read, create, update: if isOwner(resource.data.userId) || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // ===== BALANCE TRANSACTIONS =====
+    match /balance_transactions/{docId} {
+      allow read: if isOwner(resource.data.userId) || isAdmin();
+      allow create: if (isOwner(incomingData().userId) || isAdmin())
+                    && incomingData().amount is number;
+      allow update, delete: if isAdmin();
+    }
+
+    // ===== TRANSACTIONS (general) =====
+    match /transactions/{docId} {
+      allow read: if isOwner(resource.data.userId) || isAdmin();
+      allow create, update: if isOwner(incomingData().userId) || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // ===== FEEDBACKS =====
+    match /feedbacks/{docId} {
+      allow read: if true;
+      allow create: if request.auth != null
+                    && incomingData().keys().hasAll(['userId', 'rating', 'message'])
+                    && incomingData().rating >= 1 && incomingData().rating <= 5;
+      allow update, delete: if isAdmin() || isOwner(resource.data.userId);
+    }
+
+    // ===== ADMIN AUTH (optional – can keep for client-side check) =====
+    match /admin-auth-email/{email} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // ===== CATCH-ALL (fallback – admin only) =====
+    match /{document=**} {
+      allow read, write: if isAdmin();
+    }
+  }
+}

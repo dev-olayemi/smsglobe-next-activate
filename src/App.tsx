@@ -14,6 +14,16 @@ import Profile from "./pages/Profile";
 import Transactions from "./pages/Transactions";
 import PaymentCallback from "./pages/PaymentCallback";
 import NotFound from "./pages/NotFound";
+import Admin from "./pages/Admin";
+import Esim from "./pages/Esim";
+import ProductDetail from "./pages/ProductDetail";
+import Orders from "./pages/Orders";
+import TopUp from "./pages/TopUp";
+import VpnAndProxy from "./pages/VpnAndProxy";
+import ProviderProducts from "./pages/ProviderProducts";
+import EsimCategories from "./pages/EsimCategories";
+import EsimCategoryProducts from "./pages/EsimCategoryProducts";
+import SMS from "./pages/SMS";
 
 const queryClient = new QueryClient();
 
@@ -31,6 +41,16 @@ const App = () => (
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/pricing" element={<Pricing />} />
             <Route path="/about" element={<About />} />
+            <Route path="/admin" element={<Admin />} />
+            <Route path="/esim" element={<Esim />} />
+            <Route path="/esim-categories" element={<EsimCategories />} />
+            <Route path="/esim-category/:category" element={<EsimCategoryProducts />} />
+            <Route path="/vpn-and-proxy" element={<VpnAndProxy />} />
+            <Route path="/sms" element={<SMS />} />
+            <Route path="/provider/:provider" element={<ProviderProducts />} />
+            <Route path="/product/:slug" element={<ProductDetail />} />
+            <Route path="/orders" element={<Orders />} />
+            <Route path="/top-up" element={<TopUp />} />
             <Route path="/profile" element={<Profile />} />
             <Route path="/transactions" element={<Transactions />} />
             <Route path="/payment-callback" element={<PaymentCallback />} />

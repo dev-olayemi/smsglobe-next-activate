@@ -13,37 +13,81 @@ import {
   serverTimestamp,
 } from "firebase/firestore";
 
-const FUNCTIONS_BASE =
-  import.meta.env.VITE_FUNCTIONS_BASE_URL ||
-  import.meta.env.VITE_PUBLIC_FUNCTIONS_BASE_URL ||
-  import.meta.env.NEXT_PUBLIC_FUNCTIONS_BASE_URL ||
-  "/api/functions";
+// Resolve functions base URL with sensible defaults:
+// 1. Use explicit env var if provided
+// 2. If running locally and a Firebase project id is set, point to the emulator default
+// 3. Fallback to `/api` which matches `exports.api = functions.https.onRequest(app)` when proxied
+const explicitBase = import.meta.env.VITE_FUNCTIONS_BASE_URL || import.meta.env.VITE_PUBLIC_FUNCTIONS_BASE_URL || import.meta.env.NEXT_PUBLIC_FUNCTIONS_BASE_URL;
+const firebaseProjectId = import.meta.env.VITE_PUBLIC_FIREBASE_PROJECT_ID || import.meta.env.VITE_FIREBASE_PROJECT_ID;
+let FUNCTIONS_BASE = explicitBase || "";
+if (!FUNCTIONS_BASE) {
+  // Prefer emulator URL during local development. Detect common local hostnames.
+  try {
+    const isBrowser = typeof window !== 'undefined';
+    const hostname = isBrowser ? window.location.hostname : '';
+    const isLocalHost = hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '0.0.0.0' || hostname.startsWith('192.168.') || hostname.startsWith('10.') || hostname.startsWith('172.');
+    if (isLocalHost && firebaseProjectId) {
+      FUNCTIONS_BASE = `http://localhost:5001/${firebaseProjectId}/us-central1/api`;
+    } else {
+      // default to /api which will map to cloud function named `api` when proxied (deployed)
+      FUNCTIONS_BASE = "/api";
+    }
+  } catch (e) {
+    FUNCTIONS_BASE = "/api";
+  }
+}
+
+// Debug: show resolved functions base in console (helps troubleshooting during development)
+try { if (typeof window !== 'undefined') console.debug('FUNCTIONS_BASE =', FUNCTIONS_BASE); } catch (e) {}
 
 async function invokeFunction(name: string, body?: any) {
-  try {
-    const url = `${FUNCTIONS_BASE}/${name}`;
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body || {}),
-    });
-    // Some endpoints may return empty bodies or non-JSON (404 pages). Read text first.
-    const text = await res.text();
-    let data: any = null;
-    if (text) {
-      try {
-        data = JSON.parse(text);
-      } catch (e) {
-        // Not a JSON response
-        return { data: null, error: { message: 'Non-JSON response from function', body: text } };
-      }
-    }
+  // Try multiple candidate endpoints in case the emulator isn't running or the proxy path differs.
+  const candidates = [] as string[];
+  const base = FUNCTIONS_BASE.endsWith('/') ? FUNCTIONS_BASE.slice(0, -1) : FUNCTIONS_BASE;
+  // primary candidate (emulator or explicit base)
+  candidates.push(`${base}/${name}`);
+  // common fallback when functions are proxied under /api
+  candidates.push(`/api/${name}`);
+  // older path used previously
+  candidates.push(`/api/functions/${name}`);
+  // absolute fallback to origin + /api
+  if (typeof window !== 'undefined') candidates.push(`${window.location.origin}/api/${name}`);
 
-    if (!res.ok) return { data: null, error: data || { message: 'Function error', status: res.status } };
-    return { data, error: null };
-  } catch (error) {
-    return { data: null, error };
+  let lastError: any = null;
+  for (const url of candidates) {
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body || {}),
+      });
+
+      const text = await res.text();
+      let data: any = null;
+      if (text) {
+        try {
+          data = JSON.parse(text);
+        } catch (e) {
+          // Not a JSON response — return useful info
+          return { data: null, error: { message: 'Non-JSON response from function', body: text, url } };
+        }
+      }
+
+      if (!res.ok) {
+        // If we got a valid response but with error status, return that immediately
+        lastError = data || { message: 'Function error', status: res.status, url };
+        continue;
+      }
+
+      return { data, error: null };
+    } catch (err) {
+      // network error (connection refused, CORS, etc.) — try next candidate
+      lastError = { message: 'Network error invoking function', details: String(err), url };
+      continue;
+    }
   }
+
+  return { data: null, error: lastError };
 }
 
 export const firestoreApi = {

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { 
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword,
@@ -16,7 +17,7 @@ export interface AuthState {
 
 export const firebaseAuthService = {
   // Email/Password Sign Up
-  async signUp(email: string, password: string, username?: string) {
+  async signUp(email: string, password: string, username?: string, recaptchaToken?: string) {
     try {
       // Check username availability if provided
       if (username) {
@@ -55,7 +56,7 @@ export const firebaseAuthService = {
   },
 
   // Email/Password Sign In (supports email OR username)
-  async signIn(identifier: string, password: string) {
+  async signIn(identifier: string, password: string, p0?: { recaptchaToken: string; }) {
     try {
       let email = identifier;
       

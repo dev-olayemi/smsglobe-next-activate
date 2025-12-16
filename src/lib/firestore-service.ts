@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { 
   doc, 
   getDoc, 
@@ -30,8 +31,8 @@ export interface UserProfile {
   referralCount: number;
   referralEarnings: number;
   apiKey?: string;
-  createdAt: Timestamp;
-  updatedAt: Timestamp;
+  createdAt?: Timestamp | any;
+  updatedAt?: Timestamp | any;
 }
 
 // Referred User (for referral list)
@@ -39,7 +40,7 @@ export interface ReferredUser {
   id: string;
   email: string;
   username?: string;
-  createdAt: Timestamp;
+  createdAt?: Timestamp | any;
 }
 
 // Balance Transaction
@@ -50,7 +51,7 @@ export interface BalanceTransaction {
   amount: number;
   description: string;
   balanceAfter: number;
-  createdAt: Timestamp;
+  createdAt?: Timestamp | any;
 }
 
 // Activation/Order
@@ -64,8 +65,8 @@ export interface Activation {
   smsCode?: string;
   price: number;
   externalId?: string;
-  createdAt: Timestamp;
-  updatedAt: Timestamp;
+  createdAt?: Timestamp | any;
+  updatedAt?: Timestamp | any;
 }
 
 // Deposit
@@ -79,8 +80,8 @@ export interface Deposit {
   paymentMethod: 'flutterwave' | 'crypto';
   txRef: string;
   transactionId?: string;
-  createdAt: Timestamp;
-  completedAt?: Timestamp;
+  createdAt?: Timestamp | any;
+  completedAt?: Timestamp | any;
 }
 
 // Product Category Types
@@ -88,6 +89,8 @@ export type ProductCategory = 'esim' | 'proxy' | 'vpn' | 'rdp' | 'gift';
 
 // Product Listing (admin-managed)
 export interface ProductListing {
+  [x: string]: any;
+  provider: string;
   id: string;
   category: ProductCategory;
   name: string;
@@ -98,8 +101,12 @@ export interface ProductListing {
   region?: string;
   stock?: number;
   isActive: boolean;
-  createdAt: Timestamp;
-  updatedAt: Timestamp;
+  outOfStock?: boolean;
+  slug?: string;
+  imageFilename?: string; // filename stored in /assets/proxy-vpn/
+  link?: string; // optional external or provider link; admin can fill
+  createdAt?: Timestamp | any;
+  updatedAt?: Timestamp | any;
 }
 
 // Product Order
@@ -115,9 +122,61 @@ export interface ProductOrder {
   status: 'pending' | 'processing' | 'completed' | 'cancelled' | 'refunded';
   deliveryDetails?: string; // Admin fills this with VPN credentials, eSIM details, etc.
   adminNotes?: string;
-  createdAt: Timestamp;
-  updatedAt: Timestamp;
-  completedAt?: Timestamp;
+  createdAt?: Timestamp | any;
+  updatedAt?: Timestamp | any;
+  completedAt?: Timestamp | any;
+}
+
+// SMS Order Types
+export type SMSOrderType = 'one-time' | 'long-term';
+export type SMSOrderStatus = 'pending' | 'awaiting_mdn' | 'reserved' | 'active' | 'completed' | 'rejected' | 'timed_out' | 'cancelled' | 'expired';
+
+export interface SMSOrder {
+  id: string;
+  userId: string;
+  userEmail: string;
+  username?: string;
+  orderType: SMSOrderType;
+  service: string;
+  mdn?: string; // Mobile Directory Number
+  externalId: string; // Tellabot request ID
+  status: SMSOrderStatus;
+  price: number; // Price with markup
+  basePrice: number; // Original price from API
+  markup: number; // Markup amount
+  carrier?: string;
+  state?: string; // For geo-targeted requests
+  expiresAt?: Timestamp | any; // For long-term rentals
+  autoRenew?: boolean; // For long-term rentals
+  duration?: number; // Duration in days for long-term
+  smsMessages?: SMSMessage[];
+  createdAt?: Timestamp | any;
+  updatedAt?: Timestamp | any;
+  activatedAt?: Timestamp | any;
+  completedAt?: Timestamp | any;
+}
+
+export interface SMSMessage {
+  id: string;
+  timestamp: number;
+  dateTime: string;
+  from: string;
+  to: string;
+  service: string;
+  price: number;
+  reply: string;
+  pin?: string;
+  receivedAt: Timestamp | any;
+}
+
+export interface SMSTellabotService {
+  name: string;
+  price: number; // Base price
+  ltr_price: number; // Long-term price
+  ltr_short_price: number; // Short-term price
+  available: number;
+  ltr_available: number;
+  recommended_markup: number;
 }
 
 export const firestoreService = {
@@ -424,6 +483,18 @@ export const firestoreService = {
     return null;
   },
 
+  async getProductBySlug(slug: string): Promise<ProductListing | null> {
+    const colRef = collection(db, "product_listings");
+    const q = query(colRef, where("slug", "==", slug));
+    const snapshot = await getDocs(q);
+    
+    if (!snapshot.empty) {
+      const doc = snapshot.docs[0];
+      return { id: doc.id, ...doc.data() } as ProductListing;
+    }
+    return null;
+  },
+
   async createProductListing(product: Omit<ProductListing, 'id' | 'createdAt' | 'updatedAt'>) {
     const colRef = collection(db, "product_listings");
     const docRef = await addDoc(colRef, {
@@ -488,6 +559,69 @@ export const firestoreService = {
       ...data,
       updatedAt: serverTimestamp()
     });
+  },
+
+  // ===== SMS ORDERS =====
+  async createSMSOrder(order: Omit<SMSOrder, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> {
+    const docRef = await addDoc(collection(db, "sms_orders"), {
+      ...order,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    });
+    return docRef.id;
+  },
+
+  async getSMSOrder(orderId: string): Promise<SMSOrder | null> {
+    const docRef = doc(db, "sms_orders", orderId);
+    const docSnap = await getDoc(docRef);
+    
+    if (docSnap.exists()) {
+      return { id: docSnap.id, ...docSnap.data() } as SMSOrder;
+    }
+    return null;
+  },
+
+  async getUserSMSOrders(userId: string): Promise<SMSOrder[]> {
+    const colRef = collection(db, "sms_orders");
+    const q = query(colRef, where("userId", "==", userId), orderBy("createdAt", "desc"));
+    const snapshot = await getDocs(q);
+    
+    return snapshot.docs.map(docSnap => ({
+      id: docSnap.id,
+      ...docSnap.data()
+    } as SMSOrder));
+  },
+
+  async updateSMSOrder(orderId: string, data: Partial<SMSOrder>) {
+    const docRef = doc(db, "sms_orders", orderId);
+    await updateDoc(docRef, {
+      ...data,
+      updatedAt: serverTimestamp()
+    });
+  },
+
+  async addSMSMessage(orderId: string, message: Omit<SMSMessage, 'id' | 'receivedAt'>) {
+    const messageId = Date.now().toString();
+    const smsMessage: SMSMessage = {
+      ...message,
+      id: messageId,
+      receivedAt: serverTimestamp()
+    };
+
+    const order = await this.getSMSOrder(orderId);
+    if (!order) throw new Error("SMS order not found");
+
+    const updatedMessages = [...(order.smsMessages || []), smsMessage];
+    await this.updateSMSOrder(orderId, { smsMessages: updatedMessages });
+
+    return smsMessage;
+  },
+
+  async getActiveSMSOrders(userId: string): Promise<SMSOrder[]> {
+    const orders = await this.getUserSMSOrders(userId);
+    return orders.filter(order => 
+      ['pending', 'awaiting_mdn', 'reserved', 'active'].includes(order.status)
+    );
   },
 
   // ===== PURCHASE PRODUCT =====

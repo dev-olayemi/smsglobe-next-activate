@@ -1,48 +1,112 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import ReCAPTCHA from "react-google-recaptcha";
+import { z } from "zod";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+
 import { toast } from "sonner";
 import { firebaseAuthService } from "@/lib/firebase-auth";
-import { Loader2 } from "lucide-react";
+import { Loader2, Eye, EyeOff } from "lucide-react";
 import logo from "@/assets/logo.png";
-import { z } from "zod";
 
+/* -------------------- Validation -------------------- */
 const loginSchema = z.object({
   identifier: z.string().min(3, "Email or username is required"),
   password: z.string().min(6, "Password must be at least 6 characters"),
 });
 
+/* -------------------- Production Check -------------------- */
+const PRODUCTION_DOMAINS = [
+  "smsglobe.net",
+  "smsglobe-test.vercel.app",
+];
+
+const isProduction = () => {
+  if (typeof window === "undefined") return false;
+  const hostname = window.location.hostname;
+  const protocol = window.location.protocol;
+  return (
+    PRODUCTION_DOMAINS.includes(hostname) ||
+    (hostname.endsWith(".vercel.app") && protocol === "https:")
+  );
+};
+
+/* -------------------- Component -------------------- */
 const Login = () => {
   const navigate = useNavigate();
+  const recaptchaRef = useRef<ReCAPTCHA>(null);
+
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [recaptchaToken, setRecaptchaToken] = useState<string | null>(null);
 
+  const siteKey = import.meta.env.VITE_PUBLIC_RECAPTCHA_SITE_KEY;
+
+  /* -------------------- Auto redirect if logged in -------------------- */
   useEffect(() => {
     const user = firebaseAuthService.getCurrentUser();
-    if (user) {
-      navigate("/dashboard");
-    }
+    if (user) navigate("/dashboard");
   }, [navigate]);
 
+  /* -------------------- Handle Email/Username Login -------------------- */
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
+    // Require reCAPTCHA in production
+    if (isProduction() && !recaptchaToken) {
+      toast.error("Please complete the reCAPTCHA verification");
+      return;
+    }
+
     try {
       const validated = loginSchema.parse({ identifier, password });
       setLoading(true);
 
-      const { user, error } = await firebaseAuthService.signIn(validated.identifier, validated.password);
+      const { user, error } = await firebaseAuthService.signIn(
+        validated.identifier,
+        validated.password,
+        {
+          recaptchaToken: isProduction() ? recaptchaToken : null,
+        }
+      );
 
       if (error) {
         toast.error(error);
-      } else if (user) {
+        // Reset reCAPTCHA on error
+        if (isProduction() && recaptchaRef.current) {
+          recaptchaRef.current.reset();
+          setRecaptchaToken(null);
+        }
+        return;
+      }
+
+      if (user) {
         toast.success("Welcome back!");
-        navigate("/dashboard");
+        // After login, redirect to stored path if present
+        try {
+          const redirect = localStorage.getItem('post_auth_redirect');
+          if (redirect) {
+            localStorage.removeItem('post_auth_redirect');
+            navigate(redirect);
+          } else {
+            navigate("/dashboard");
+          }
+        } catch (e) {
+          navigate("/dashboard");
+        }
       }
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -55,39 +119,52 @@ const Login = () => {
     }
   };
 
+  /* -------------------- Handle Google Sign In -------------------- */
   const handleGoogleSignIn = async () => {
     setGoogleLoading(true);
     try {
       const { user, error } = await firebaseAuthService.signInWithGoogle();
-      
+
       if (error) {
         toast.error(error);
       } else if (user) {
-        toast.success("Welcome!");
-        navigate("/dashboard");
+        toast.success("Welcome back!");
+        try {
+          const redirect = localStorage.getItem('post_auth_redirect');
+          if (redirect) {
+            localStorage.removeItem('post_auth_redirect');
+            navigate(redirect);
+          } else {
+            navigate("/dashboard");
+          }
+        } catch (e) {
+          navigate("/dashboard");
+        }
       }
-    } catch (error) {
+    } catch {
       toast.error("Failed to sign in with Google");
     } finally {
       setGoogleLoading(false);
     }
   };
 
+  /* -------------------- UI -------------------- */
   return (
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-b from-background to-muted/30 p-4">
-      <Card className="w-full max-w-md shadow-xl">
+      <Card className="w-full max-w-md border border">
         <CardHeader className="text-center">
-          <Link to="/" className="flex items-center justify-center gap-2 mb-4">
+          <Link to="/" className="flex justify-center mb-4">
             <img src={logo} alt="SMSGlobe" className="h-16" />
           </Link>
           <CardTitle className="text-2xl">Welcome Back</CardTitle>
           <CardDescription>Sign in to your SMSGlobe account</CardDescription>
         </CardHeader>
+
         <CardContent className="space-y-4">
-          {/* Google Sign In Button */}
-          <Button 
-            type="button" 
-            variant="outline" 
+          {/* Google Sign In */}
+          <Button
+            type="button"
+            variant="outline"
             className="w-full flex items-center justify-center gap-2"
             onClick={handleGoogleSignIn}
             disabled={googleLoading}
@@ -122,41 +199,80 @@ const Login = () => {
               <span className="w-full border-t" />
             </div>
             <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-background px-2 text-muted-foreground">Or continue with</span>
+              <span className="bg-background px-2 text-muted-foreground">
+                Or continue with
+              </span>
             </div>
           </div>
 
+          {/* Email/Username Login Form */}
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="identifier">Email or Username</Label>
               <Input
                 id="identifier"
-                type="text"
-                placeholder="you@example.com or username"
                 value={identifier}
                 onChange={(e) => setIdentifier(e.target.value)}
+                placeholder="you@example.com or username"
                 required
               />
             </div>
+
             <div className="space-y-2">
               <Label htmlFor="password">Password</Label>
-              <Input
-                id="password"
-                type="password"
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-              />
+              <div className="relative">
+                <Input
+                  id="password"
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  tabIndex={-1}
+                >
+                  {showPassword ? (
+                    <EyeOff className="h-4 w-4" />
+                  ) : (
+                    <Eye className="h-4 w-4" />
+                  )}
+                </button>
+              </div>
             </div>
-            <Button type="submit" className="w-full" disabled={loading}>
+
+            {/* reCAPTCHA - only in production */}
+            {isProduction() && siteKey && (
+              <div className="flex justify-center">
+                <ReCAPTCHA
+                  ref={recaptchaRef}
+                  sitekey={siteKey}
+                  onChange={(token) => setRecaptchaToken(token)}
+                  onExpired={() => setRecaptchaToken(null)}
+                  onErrored={() => setRecaptchaToken(null)}
+                />
+              </div>
+            )}
+
+            <Button
+              type="submit"
+              className="w-full"
+              disabled={loading || (isProduction() && !recaptchaToken)}
+            >
               {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Sign In
             </Button>
           </form>
+
           <div className="text-center text-sm text-muted-foreground">
             Don't have an account?{" "}
-            <Link to="/signup" className="text-primary hover:underline font-medium">
+            <Link
+              to="/signup"
+              className="text-primary hover:underline font-medium"
+            >
               Sign up
             </Link>
           </div>
