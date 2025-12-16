@@ -43,52 +43,63 @@ const PaymentCallback = () => {
 
     try {
       // Verify payment with Flutterwave via edge function
-      const { data, error } = await firestoreApi.invokeFunction("flutterwave-verify", { transaction_id: transactionId, tx_ref: txRef });
+      const { data, error } = await firestoreApi.invokeFunction("flutterwave-verify", { 
+        transaction_id: transactionId, 
+        tx_ref: txRef 
+      });
 
       if (error) throw error;
 
-      if (data?.status === "success" && data.verified) {
-        const paymentData = data.data;
+      if (data?.success) {
+        // Get deposit from Firebase using txRef
+        const deposit = await firestoreService.getDepositByTxRef(txRef || data.tx_ref);
         
-        // Update Firebase with the payment
-        if (user && paymentData.depositId) {
+        if (deposit && user) {
           try {
+            // Check if already completed
+            if (deposit.status === 'completed') {
+              setStatus("success");
+              setMessage("This payment has already been processed");
+              setAmountUSD(deposit.amountUSD);
+              setAmountNGN(deposit.amountNGN);
+              return;
+            }
+
             // Complete the deposit in Firebase
             const newBalance = await firestoreService.completeDeposit(
-              paymentData.depositId,
+              deposit.id,
               user.uid,
-              paymentData.amountUSD,
-              paymentData.transactionId
+              deposit.amountUSD,
+              String(data.transaction_id)
             );
 
             // Refresh the user profile
             await refreshProfile();
 
             setStatus("success");
-            setAmountUSD(paymentData.amountUSD);
-            setAmountNGN(paymentData.amountNGN);
-            setMessage(`Successfully added ${formatCurrency(paymentData.amountUSD, 'USD')} to your balance`);
+            setAmountUSD(deposit.amountUSD);
+            setAmountNGN(deposit.amountNGN);
+            setMessage(`Successfully added ${formatCurrency(deposit.amountUSD, 'USD')} to your balance`);
             toast.success("Payment successful!");
           } catch (firebaseError) {
             console.error("Firebase update error:", firebaseError);
-            // Payment verified but Firebase update failed
             setStatus("success");
-            setAmountUSD(paymentData.amountUSD);
+            setAmountUSD(deposit.amountUSD);
             setMessage("Payment verified! Your balance will be updated shortly.");
             toast.warning("Payment verified. Balance updating...");
           }
-        } else {
-          // No user logged in or no deposit ID
+        } else if (data.meta?.amountUSD) {
+          // Fallback to meta data from Flutterwave
           setStatus("success");
-          setAmountUSD(paymentData.amountUSD || 0);
+          setAmountUSD(data.meta.amountUSD);
+          setMessage("Payment verified successfully");
+        } else {
+          setStatus("success");
           setMessage("Payment verified successfully");
         }
-      } else if (data.status === "already_processed") {
-        setStatus("success");
-        setMessage(data.message || "This payment has already been processed");
       } else {
         setStatus("failed");
-        setMessage(data.message || "Payment verification failed");
+        setMessage(data?.message || "Payment verification failed");
       }
     } catch (error) {
       console.error("Verification error:", error);

@@ -31,6 +31,7 @@ export interface UserProfile {
   referralCount: number;
   referralEarnings: number;
   apiKey?: string;
+  isAdmin?: boolean;
   createdAt?: Timestamp | any;
   updatedAt?: Timestamp | any;
 }
@@ -463,14 +464,20 @@ export const firestoreService = {
     }
     
     const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ProductListing));
+    return snapshot.docs.map(docSnap => {
+      const data = docSnap.data() as Record<string, any>;
+      return { id: docSnap.id, ...data } as ProductListing;
+    });
   },
 
   async getAllProductListings(): Promise<ProductListing[]> {
     const colRef = collection(db, "product_listings");
     const q = query(colRef, orderBy("createdAt", "desc"));
     const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ProductListing));
+    return snapshot.docs.map(docSnap => {
+      const data = docSnap.data() as Record<string, any>;
+      return { id: docSnap.id, ...data } as ProductListing;
+    });
   },
 
   async getProductById(productId: string): Promise<ProductListing | null> {
