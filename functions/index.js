@@ -9,150 +9,193 @@ const app = express();
 app.use(cors({ origin: true }));
 app.use(express.json());
 
-// --- Flutterwave token manager ---
-let accessToken = null;
-let expiresIn = 0; // seconds
-let lastTokenRefreshTime = 0; // ms since epoch
+const axios = require("axios");
 
-const FLW_CLIENT_ID = process.env.FLW_CLIENT_ID || process.env.NEXT_PUBLIC_FLW_PUBLIC_KEY || process.env.VITE_PUBLIC_FLW_PUBLIC_KEY || null;
-const FLW_CLIENT_SECRET = process.env.FLW_CLIENT_SECRET || process.env.FLW_SECRET_KEY || null;
+const FLW_SECRET_KEY = process.env.FLW_SECRET_KEY || null;
 
-async function refreshToken() {
+async function verifyFlutterwaveTransaction(transactionId, txRef) {
+  // If we don't have a secret key (or no transaction id), fall back to a mock "successful" response.
+  if (!FLW_SECRET_KEY || !transactionId) {
+    return {
+      ok: true,
+      data: {
+        id: Number(transactionId) || 0,
+        tx_ref: txRef,
+        flw_ref: `MockFLWRef-${Date.now()}`,
+        amount: 0,
+        currency: "NGN",
+        status: "successful",
+      },
+      mocked: true,
+    };
+  }
+
   try {
-    if (!FLW_CLIENT_ID || !FLW_CLIENT_SECRET) {
-      console.warn('Flutterwave client id/secret not configured for token refresh');
-      return;
+    const resp = await axios.get(`https://api.flutterwave.com/v3/transactions/${transactionId}/verify`, {
+      headers: {
+        Authorization: `Bearer ${FLW_SECRET_KEY}`,
+        "Content-Type": "application/json",
+      },
+      timeout: 15000,
+    });
+
+    const payload = resp.data;
+    if (!payload || payload.status !== "success" || !payload.data) {
+      return { ok: false, message: payload?.message || "Flutterwave verification failed" };
     }
 
-    const axios = require('axios');
-    const resp = await axios.post(
-      'https://idp.flutterwave.com/realms/flutterwave/protocol/openid-connect/token',
-      new URLSearchParams({
-        client_id: FLW_CLIENT_ID,
-        client_secret: FLW_CLIENT_SECRET,
-        grant_type: 'client_credentials'
-      }).toString(),
-      { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
-    );
+    const data = payload.data;
+    if (txRef && data.tx_ref && String(data.tx_ref) !== String(txRef)) {
+      return { ok: false, message: "Transaction reference mismatch" };
+    }
 
-    accessToken = resp.data.access_token;
-    expiresIn = resp.data.expires_in || 0;
-    lastTokenRefreshTime = Date.now();
-    console.log('Flutterwave token refreshed, expires in', expiresIn, 'seconds');
+    const gatewayStatus = String(data.status || "").toLowerCase();
+    if (gatewayStatus !== "successful" && gatewayStatus !== "completed") {
+      return { ok: false, message: `Payment not successful (${data.status})` };
+    }
+
+    return { ok: true, data, mocked: false };
   } catch (err) {
-    console.error('Failed to refresh Flutterwave token:', err.message);
+    console.error("Flutterwave verify request failed:", err?.message || err);
+    return { ok: false, message: "Unable to verify payment with Flutterwave" };
   }
 }
 
-// --- Flutterwave payment initialization ---
-app.post("/flutterwave-initialize", async (req, res) => {
-  try {
-    const { amount, amountUSD, email, txRef, userId, depositId, currency = 'NGN' } = req.body;
-
-    if (!amount || !email || !txRef) {
-      return res.status(400).json({ error: 'Missing required fields: amount, email, txRef' });
-    }
-
-    // Mock Flutterwave response for testing
-    const mockResponse = {
-      status: 'success',
-      message: 'Payment initialized successfully',
-      data: {
-        payment_link: `https://checkout.flutterwave.com/pay/${txRef}`,
-        tx_ref: txRef,
-        amount: amount,
-        currency: currency,
-        customer: {
-          email: email,
-          user_id: userId
-        },
-        deposit_id: depositId
-      }
-    };
-
-    console.log('Flutterwave initialize called with:', { amount, email, txRef, userId });
-    res.json(mockResponse);
-  } catch (error) {
-    console.error('Flutterwave initialize error:', error);
-    res.status(500).json({ error: 'Failed to initialize payment' });
-  }
-});
-
-// --- Flutterwave payment verification ---
+// --- Flutterwave payment verification (server updates balance + receipt) ---
 app.post("/flutterwave-verify", async (req, res) => {
   try {
-    const { transaction_id, tx_ref } = req.body;
+    const { transaction_id, tx_ref } = req.body || {};
 
-    if (!transaction_id && !tx_ref) {
-      return res.status(400).json({ error: 'Missing transaction_id or tx_ref' });
+    if (!tx_ref) {
+      return res.status(400).json({ status: "error", message: "Missing tx_ref" });
     }
 
-    // Mock verification response that matches Flutterwave's actual response structure
-    const mockResponse = {
-      status: 'success',
-      message: 'Payment verified successfully',
-      data: {
-        id: parseInt(transaction_id) || 9870093,
-        tx_ref: tx_ref || 'test_tx_ref',
-        flw_ref: `MockFLWRef-${Date.now()}`,
-        amount: 14521.2,
-        currency: 'NGN',
-        charged_amount: 14521.2,
-        status: 'successful',
-        charge_response_code: '00',
-        charge_response_message: 'Approved Successful',
-        created_at: new Date().toISOString(),
-        customer: {
-          id: 12345,
-          name: 'Test User',
-          email: 'test@example.com',
-          phone_number: '08012345678'
-        }
-      }
-    };
+    const db = admin.firestore();
 
-    console.log('Flutterwave verify called with:', { transaction_id, tx_ref });
-
-    // Attempt to update Firestore records server-side so client does not need
-    // to perform sensitive balance updates. This runs for both real and mock
-    // verification flows.
-    try {
-      const db = admin.firestore();
-      if (tx_ref) {
-        const q = await db.collection('deposits').where('txRef', '==', tx_ref).limit(1).get();
-        if (!q.empty) {
-          const doc = q.docs[0];
-          const deposit = doc.data();
-          if (deposit.status !== 'completed') {
-            // mark deposit completed
-            await doc.ref.update({ status: 'completed', transactionId: String(transaction_id || mockResponse.data.id), completedAt: admin.firestore.FieldValue.serverTimestamp() });
-
-            // update user balance (balance stored in USD)
-            const userId = deposit.userId;
-            if (userId) {
-              const userRef = db.collection('users').doc(userId);
-              const userSnap = await userRef.get();
-              const profile = userSnap.exists ? userSnap.data() : {};
-              const newBalance = (profile.balance || 0) + (deposit.amountUSD || 0);
-              await userRef.update({ balance: newBalance, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
-
-              // create balance transaction
-              await db.collection('balance_transactions').add({ userId, type: 'deposit', amount: deposit.amountUSD || 0, description: 'Deposit via Flutterwave', balanceAfter: newBalance, createdAt: admin.firestore.FieldValue.serverTimestamp() });
-            }
-
-            // add payment record
-            await db.collection('payments').add({ userId: deposit.userId || null, txRef: tx_ref, transactionId: String(transaction_id || mockResponse.data.id), amountUSD: deposit.amountUSD || null, amountNGN: deposit.amount || null, providerRef: mockResponse.data.flw_ref, status: 'completed', createdAt: admin.firestore.FieldValue.serverTimestamp() });
-          }
-        }
-      }
-    } catch (err) {
-      console.error('Error updating Firestore during flutterwave verify:', err.message || err);
+    // Find the deposit by txRef
+    const depSnap = await db.collection("deposits").where("txRef", "==", String(tx_ref)).limit(1).get();
+    if (depSnap.empty) {
+      return res.status(404).json({ status: "error", message: "Deposit not found for this tx_ref" });
     }
 
-    res.json(mockResponse);
+    const depDoc = depSnap.docs[0];
+    const depRef = depDoc.ref;
+
+    // Verify with gateway (or mock)
+    const verify = await verifyFlutterwaveTransaction(transaction_id, tx_ref);
+    if (!verify.ok) {
+      return res.status(400).json({ status: "error", message: verify.message || "Verification failed" });
+    }
+
+    const gw = verify.data || {};
+    const verifiedTransactionId = String(gw.id || transaction_id || "");
+    const providerRef = String(gw.flw_ref || gw.flwRef || "");
+
+    let responsePayload = null;
+
+    await db.runTransaction(async (t) => {
+      const depFresh = await t.get(depRef);
+      const deposit = depFresh.data() || {};
+
+      const userId = deposit.userId;
+      if (!userId) {
+        throw new Error("Deposit is missing userId");
+      }
+
+      const amountUSD = Number(deposit.amountUSD || 0);
+      const amountNGN = Number(deposit.amountNGN || deposit.amount || gw.amount || 0);
+      const exchangeRate = Number(deposit.exchangeRate || 0);
+
+      const userRef = db.collection("users").doc(String(userId));
+      const userSnap = await t.get(userRef);
+      const currentBalance = Number((userSnap.data() || {}).balance || 0);
+
+      // Idempotency: if already completed, do not credit again.
+      if (String(deposit.status) === "completed") {
+        responsePayload = {
+          status: "success",
+          message: "This payment has already been processed",
+          receipt: {
+            txRef: String(tx_ref),
+            transactionId: verifiedTransactionId,
+            amountUSD,
+            amountNGN,
+            exchangeRate,
+            providerRef,
+            status: "completed",
+          },
+          newBalanceUSD: currentBalance,
+          alreadyProcessed: true,
+        };
+        return;
+      }
+
+      const newBalanceUSD = currentBalance + amountUSD;
+
+      // Update deposit
+      t.update(depRef, {
+        status: "completed",
+        transactionId: verifiedTransactionId,
+        providerRef,
+        completedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      // Update user balance (USD)
+      t.update(userRef, {
+        balance: newBalanceUSD,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      // Record balance transaction
+      const balTxRef = db.collection("balance_transactions").doc();
+      t.set(balTxRef, {
+        userId: String(userId),
+        type: "deposit",
+        amount: amountUSD,
+        description: "Deposit via Flutterwave",
+        balanceAfter: newBalanceUSD,
+        txRef: String(tx_ref),
+        transactionId: verifiedTransactionId,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      // Receipt
+      const payRef = db.collection("payments").doc();
+      t.set(payRef, {
+        userId: String(userId),
+        txRef: String(tx_ref),
+        transactionId: verifiedTransactionId,
+        amountUSD,
+        amountNGN,
+        exchangeRate,
+        paymentMethod: "flutterwave",
+        providerRef,
+        status: "completed",
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      responsePayload = {
+        status: "success",
+        message: "Payment verified and balance updated",
+        receiptId: payRef.id,
+        receipt: {
+          txRef: String(tx_ref),
+          transactionId: verifiedTransactionId,
+          amountUSD,
+          amountNGN,
+          exchangeRate,
+          providerRef,
+          status: "completed",
+        },
+        newBalanceUSD,
+        alreadyProcessed: false,
+      };
+    });
+
+    return res.json(responsePayload);
   } catch (error) {
-    console.error('Flutterwave verify error:', error);
-    res.status(500).json({ error: 'Failed to verify payment' });
+    console.error("flutterwave-verify error:", error);
+    return res.status(500).json({ status: "error", message: "Failed to verify payment" });
   }
 });
 

@@ -14,25 +14,39 @@ import {
 } from "firebase/firestore";
 
 // Resolve functions base URL with sensible defaults:
-// 1. Use explicit env var if provided
-// 2. If running locally and a Firebase project id is set, point to the emulator default
-// 3. Fallback to `/api` which matches `exports.api = functions.https.onRequest(app)` when proxied
-const explicitBase = import.meta.env.VITE_FUNCTIONS_BASE_URL || import.meta.env.VITE_PUBLIC_FUNCTIONS_BASE_URL || import.meta.env.NEXT_PUBLIC_FUNCTIONS_BASE_URL;
+// 1. Use explicit env var if provided (but ignore localhost values when running on a hosted domain)
+// 2. Use Firebase Cloud Functions default URL when running hosted
+// 3. If running locally and a Firebase project id is set, point to the emulator default
+// 4. Fallback to `/api` (some deployments proxy functions here)
+const explicitBase =
+  import.meta.env.VITE_FUNCTIONS_BASE_URL ||
+  import.meta.env.VITE_PUBLIC_FUNCTIONS_BASE_URL ||
+  import.meta.env.NEXT_PUBLIC_FUNCTIONS_BASE_URL;
 const firebaseProjectId = import.meta.env.VITE_PUBLIC_FIREBASE_PROJECT_ID || import.meta.env.VITE_FIREBASE_PROJECT_ID;
+
+const isBrowser = typeof window !== "undefined";
+const hostname = isBrowser ? window.location.hostname : "";
+const isLocalHost =
+  hostname === "localhost" ||
+  hostname === "127.0.0.1" ||
+  hostname === "0.0.0.0" ||
+  hostname.startsWith("192.168.") ||
+  hostname.startsWith("10.") ||
+  hostname.startsWith("172.");
+
 let FUNCTIONS_BASE = explicitBase || "";
+
+// If env points to localhost but we are on a hosted domain, ignore it.
+if (!isLocalHost && FUNCTIONS_BASE && /localhost|127\.0\.0\.1/.test(FUNCTIONS_BASE)) {
+  FUNCTIONS_BASE = "";
+}
+
 if (!FUNCTIONS_BASE) {
-  // Prefer emulator URL during local development. Detect common local hostnames.
-  try {
-    const isBrowser = typeof window !== 'undefined';
-    const hostname = isBrowser ? window.location.hostname : '';
-    const isLocalHost = hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '0.0.0.0' || hostname.startsWith('192.168.') || hostname.startsWith('10.') || hostname.startsWith('172.');
-    if (isLocalHost && firebaseProjectId) {
-      FUNCTIONS_BASE = `http://localhost:5001/${firebaseProjectId}/us-central1/api`;
-    } else {
-      // default to /api which will map to cloud function named `api` when proxied (deployed)
-      FUNCTIONS_BASE = "/api";
-    }
-  } catch (e) {
+  if (!isLocalHost && firebaseProjectId) {
+    FUNCTIONS_BASE = `https://us-central1-${firebaseProjectId}.cloudfunctions.net/api`;
+  } else if (isLocalHost && firebaseProjectId) {
+    FUNCTIONS_BASE = `http://localhost:5001/${firebaseProjectId}/us-central1/api`;
+  } else {
     FUNCTIONS_BASE = "/api";
   }
 }

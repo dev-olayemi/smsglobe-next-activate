@@ -13,6 +13,7 @@ import About from "./pages/About";
 import Profile from "./pages/Profile";
 import Transactions from "./pages/Transactions";
 import PaymentCallback from "./pages/PaymentCallback";
+import Receipt from "./pages/Receipt";
 import NotFound from "./pages/NotFound";
 import Admin from "./pages/Admin";
 import Esim from "./pages/Esim";
@@ -53,6 +54,7 @@ const App = () => (
             <Route path="/top-up" element={<TopUp />} />
             <Route path="/profile" element={<Profile />} />
             <Route path="/transactions" element={<Transactions />} />
+            <Route path="/receipt/:txRef" element={<Receipt />} />
             <Route path="/payment-callback" element={<PaymentCallback />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
