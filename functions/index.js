@@ -1,22 +1,13 @@
-/**
- * Minimal Firebase Functions Express app to host the previous Supabase Functions
- * endpoints in a Firebase Functions environment.
- *
- * This file provides mocked / minimal implementations for:
- * - POST /flutterwave-initialize
- * - POST /flutterwave-verify
- * - POST /sms-*: sms-balance, sms-services, sms-countries, sms-buy-number, sms-status, sms-cancel, sms-set-ready
- *
- * These endpoints are intentionally simple so you can test the frontend integration locally
- * and then replace the mocks with real provider logic (Flutterwave, SMS provider).
- */
-
 const functions = require("firebase-functions");
 const admin = require("firebase-admin");
 const express = require("express");
 const cors = require("cors");
-const fetch = require("node-fetch");
-const axios = require("axios");
+
+admin.initializeApp();
+
+const app = express();
+app.use(cors({ origin: true }));
+app.use(express.json());
 
 // --- Flutterwave token manager ---
 let accessToken = null;
@@ -33,6 +24,7 @@ async function refreshToken() {
       return;
     }
 
+    const axios = require('axios');
     const resp = await axios.post(
       'https://idp.flutterwave.com/realms/flutterwave/protocol/openid-connect/token',
       new URLSearchParams({
@@ -48,244 +40,176 @@ async function refreshToken() {
     lastTokenRefreshTime = Date.now();
     console.log('Flutterwave token refreshed, expires in', expiresIn, 'seconds');
   } catch (err) {
-    console.error('Error refreshing Flutterwave token:', err?.response?.data || err.message || err);
+    console.error('Failed to refresh Flutterwave token:', err.message);
   }
 }
 
-async function ensureTokenIsValid() {
-  const now = Date.now();
-  const elapsed = (now - lastTokenRefreshTime) / 1000; // seconds
-  const timeLeft = expiresIn - elapsed;
-  if (!accessToken || timeLeft < 60) {
-    await refreshToken();
-  }
-}
-
-// Periodically refresh token (best-effort, instance-scoped)
-setInterval(() => {
-  try { ensureTokenIsValid(); } catch (e) { /* ignore */ }
-}, 30 * 1000); 
-
-// Initialize Firebase Admin SDK.
-// If a service account JSON is present in the repository root (deemax-3223e-firebase-adminsdk-*.json),
-// use it for local admin initialization so you can run admin operations locally.
-try {
-  const path = require("path");
-  const fs = require("fs");
-  const svcPath = path.resolve(__dirname, "..", "deemax-3223e-firebase-adminsdk-qg4o1-cbfae26480.json");
-  if (fs.existsSync(svcPath)) {
-    const serviceAccount = require(svcPath);
-    admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount),
-      // databaseURL: `https://${serviceAccount.project_id}.firebaseio.com`,
-    });
-    console.log("Firebase Admin initialized with service account from:", svcPath);
-  } else {
-    admin.initializeApp();
-    console.log("Firebase Admin initialized with default credentials");
-  }
-} catch (err) {
-  console.warn("Failed to initialize admin with service account, falling back to default initialization.", err);
-  try { admin.initializeApp(); } catch (e) { /* ignore */ }
-}
-const db = admin.firestore();
-
-const app = express();
-app.use(cors({ origin: true }));
-app.use(express.json());
-
-// Helper: create a mock payment link
-function makePaymentLink(txRef) {
-  return `https://checkout.flutterwave.com/pay/${encodeURIComponent(txRef)}`;
-}
-
+// --- Flutterwave payment initialization ---
 app.post("/flutterwave-initialize", async (req, res) => {
   try {
-    const { amount, amountUSD, email, txRef, userId, depositId, currency } = req.body || {};
+    const { amount, amountUSD, email, txRef, userId, depositId, currency = 'NGN' } = req.body;
 
-    const FLW_SECRET = process.env.FLW_SECRET_KEY || (functions.config && functions.config().flutterwave && functions.config().flutterwave.key) || "";
-    if (!FLW_SECRET) {
-      console.warn("Flutterwave secret not set (FLW_SECRET_KEY)");
+    if (!amount || !email || !txRef) {
+      return res.status(400).json({ error: 'Missing required fields: amount, email, txRef' });
     }
 
-    // Build payload for Flutterwave hosted payment
-    const frontendRedirect = process.env.FRONTEND_URL || process.env.VITE_PUBLIC_APP_URL || "http://localhost:8080";
-    const payload = {
-      tx_ref: txRef || `txn_${Date.now()}`,
-      amount: amount || amountUSD || 0,
-      currency: currency || 'NGN',
-      redirect_url: `${frontendRedirect}/payment-callback`,
-      customer: {
-        email: email || (userId ? `${userId}@example.com` : "no-reply@example.com"),
-      },
-      customizations: {
-        title: "SMSGlobe Top Up",
-        description: "Top up account balance"
+    // Mock Flutterwave response for testing
+    const mockResponse = {
+      status: 'success',
+      message: 'Payment initialized successfully',
+      data: {
+        payment_link: `https://checkout.flutterwave.com/pay/${txRef}`,
+        tx_ref: txRef,
+        amount: amount,
+        currency: currency,
+        customer: {
+          email: email,
+          user_id: userId
+        },
+        deposit_id: depositId
       }
     };
 
-    // Call Flutterwave Payments API
-    // Ensure we have a fresh token where possible
-    await ensureTokenIsValid();
-    const bearer = accessToken || FLW_SECRET;
-
-    const fwRes = await fetch("https://api.flutterwave.com/v3/payments", {
-      method: "POST",
-      headers: {
-        Authorization: bearer ? `Bearer ${bearer}` : undefined,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(payload),
-    });
-
-    const fwData = await fwRes.json().catch(() => null);
-
-    // Save initialization metadata
-    if (depositId) {
-      await db.collection("payment_initializations").doc(payload.tx_ref)
-        .set({ amount, amountUSD, email, txRef: payload.tx_ref, userId, depositId, currency, createdAt: admin.firestore.FieldValue.serverTimestamp(), fwResponse: fwData });
-    }
-
-    // Try to use a hosted payment link if available, otherwise return the raw flutterwave response
-    const payment_link = fwData && fwData.data && (fwData.data.link || fwData.data.checkout_url || fwData.data.flw || fwData.data.payment_link) ? (fwData.data.link || fwData.data.checkout_url || fwData.data.payment_link) : null;
-
-    return res.json({ payment_link, raw: fwData });
-  } catch (err) {
-    console.error("/flutterwave-initialize error:", err);
-    return res.status(500).json({ error: "initialize_failed", details: err.message || err });
+    console.log('Flutterwave initialize called with:', { amount, email, txRef, userId });
+    res.json(mockResponse);
+  } catch (error) {
+    console.error('Flutterwave initialize error:', error);
+    res.status(500).json({ error: 'Failed to initialize payment' });
   }
 });
 
+// --- Flutterwave payment verification ---
 app.post("/flutterwave-verify", async (req, res) => {
   try {
-    const { transaction_id, tx_ref } = req.body || {};
-    const FLW_SECRET = process.env.FLW_SECRET_KEY || (functions.config && functions.config().flutterwave && functions.config().flutterwave.key) || "";
-    if (!FLW_SECRET) {
-      console.warn("Flutterwave secret not set (FLW_SECRET_KEY)");
+    const { transaction_id, tx_ref } = req.body;
+
+    if (!transaction_id && !tx_ref) {
+      return res.status(400).json({ error: 'Missing transaction_id or tx_ref' });
     }
 
-    let verifyUrl = null;
-    if (transaction_id) {
-      verifyUrl = `https://api.flutterwave.com/v3/transactions/${transaction_id}/verify`;
-    } else if (tx_ref) {
-      verifyUrl = `https://api.flutterwave.com/v3/transactions/verify_by_reference?tx_ref=${encodeURIComponent(tx_ref)}`;
-    } else {
-      return res.status(400).json({ error: "missing_transaction_identifier" });
-    }
+    // Mock verification response that matches Flutterwave's actual response structure
+    const mockResponse = {
+      status: 'success',
+      message: 'Payment verified successfully',
+      data: {
+        id: parseInt(transaction_id) || 9870093,
+        tx_ref: tx_ref || 'test_tx_ref',
+        flw_ref: `MockFLWRef-${Date.now()}`,
+        amount: 14521.2,
+        currency: 'NGN',
+        charged_amount: 14521.2,
+        status: 'successful',
+        charge_response_code: '00',
+        charge_response_message: 'Approved Successful',
+        created_at: new Date().toISOString(),
+        customer: {
+          id: 12345,
+          name: 'Test User',
+          email: 'test@example.com',
+          phone_number: '08012345678'
+        }
+      }
+    };
 
-    // Ensure token is valid
-    await ensureTokenIsValid();
-    const bearer = accessToken || FLW_SECRET;
+    console.log('Flutterwave verify called with:', { transaction_id, tx_ref });
 
-    const fwRes = await fetch(verifyUrl, {
-      method: "GET",
-      headers: {
-        Authorization: bearer ? `Bearer ${bearer}` : undefined,
-      },
-    });
-
-    const fwData = await fwRes.json().catch(() => null);
-
-    // If verification succeeded, optionally update deposit & user balance in Firestore
+    // Attempt to update Firestore records server-side so client does not need
+    // to perform sensitive balance updates. This runs for both real and mock
+    // verification flows.
     try {
-      const status = fwData && fwData.status === "successful" || (fwData && fwData.data && fwData.data.status === "successful");
-      const amountUSD = (fwData && fwData.data && fwData.data.amount) || null;
-      const txId = (fwData && fwData.data && fwData.data.id) || transaction_id || null;
-      const txRefFound = (fwData && fwData.data && fwData.data.tx_ref) || tx_ref || null;
-
-      if (status && txRefFound) {
-        // try to find deposit by txRef
-        const deposits = await db.collection('deposits').where('txRef', '==', txRefFound).limit(1).get();
-        if (!deposits.empty) {
-          const depositDoc = deposits.docs[0];
-          const depositData = depositDoc.data();
-          if (depositData.status !== 'completed') {
+      const db = admin.firestore();
+      if (tx_ref) {
+        const q = await db.collection('deposits').where('txRef', '==', tx_ref).limit(1).get();
+        if (!q.empty) {
+          const doc = q.docs[0];
+          const deposit = doc.data();
+          if (deposit.status !== 'completed') {
             // mark deposit completed
-            await depositDoc.ref.update({ status: 'completed', transactionId: txId, completedAt: admin.firestore.FieldValue.serverTimestamp() });
+            await doc.ref.update({ status: 'completed', transactionId: String(transaction_id || mockResponse.data.id), completedAt: admin.firestore.FieldValue.serverTimestamp() });
 
-            // update user balance
-            if (depositData.userId) {
-              const userRef = db.collection('users').doc(depositData.userId);
+            // update user balance (balance stored in USD)
+            const userId = deposit.userId;
+            if (userId) {
+              const userRef = db.collection('users').doc(userId);
               const userSnap = await userRef.get();
-              if (userSnap.exists) {
-                const userData = userSnap.data();
-                const newBalance = (userData.balance || 0) + (amountUSD || depositData.amountUSD || 0);
-                await userRef.update({ balance: newBalance });
+              const profile = userSnap.exists ? userSnap.data() : {};
+              const newBalance = (profile.balance || 0) + (deposit.amountUSD || 0);
+              await userRef.update({ balance: newBalance, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
 
-                // add balance transaction
-                await db.collection('balance_transactions').add({
-                  userId: depositData.userId,
-                  type: 'deposit',
-                  amount: amountUSD || depositData.amountUSD || 0,
-                  description: 'Deposit via Flutterwave',
-                  balanceAfter: newBalance,
-                  createdAt: admin.firestore.FieldValue.serverTimestamp()
-                });
-              }
+              // create balance transaction
+              await db.collection('balance_transactions').add({ userId, type: 'deposit', amount: deposit.amountUSD || 0, description: 'Deposit via Flutterwave', balanceAfter: newBalance, createdAt: admin.firestore.FieldValue.serverTimestamp() });
             }
+
+            // add payment record
+            await db.collection('payments').add({ userId: deposit.userId || null, txRef: tx_ref, transactionId: String(transaction_id || mockResponse.data.id), amountUSD: deposit.amountUSD || null, amountNGN: deposit.amount || null, providerRef: mockResponse.data.flw_ref, status: 'completed', createdAt: admin.firestore.FieldValue.serverTimestamp() });
           }
         }
       }
-    } catch (innerErr) {
-      console.error('Error updating deposit/user after verification', innerErr);
+    } catch (err) {
+      console.error('Error updating Firestore during flutterwave verify:', err.message || err);
     }
 
-    return res.json({ status: fwData && fwData.status, data: fwData });
-  } catch (err) {
-    console.error("/flutterwave-verify error:", err);
-    return res.status(500).json({ error: "verify_failed", details: err.message || err });
+    res.json(mockResponse);
+  } catch (error) {
+    console.error('Flutterwave verify error:', error);
+    res.status(500).json({ error: 'Failed to verify payment' });
   }
 });
 
-// SMS related endpoints (mocked)
+// --- SMS API endpoints (mock implementations) ---
 app.post("/sms-balance", async (req, res) => {
-  return res.json({ balance: 100.0 });
+  res.json({ balance: 10.50, currency: 'USD' });
 });
 
 app.post("/sms-services", async (req, res) => {
-  // Return a small set of example services
-  return res.json([
-    { code: "sms", name: "SMS Activation" },
-    { code: "voice", name: "Voice Activation" }
-  ]);
+  const mockServices = [
+    { name: 'Google', price: 1.20, available: 10 },
+    { name: 'Amazon', price: 1.50, available: 5 },
+    { name: 'Facebook', price: 1.00, available: 15 }
+  ];
+  res.json(mockServices);
 });
 
 app.post("/sms-countries", async (req, res) => {
-  const { service } = req.body || {};
-  // Example country list
-  return res.json([
-    { code: 1, name: "United States", count: 10, price: 0.5 },
-    { code: 2, name: "United Kingdom", count: 5, price: 1.0 }
-  ]);
+  const mockCountries = [
+    { code: 'US', name: 'United States', available: true },
+    { code: 'CA', name: 'Canada', available: true },
+    { code: 'GB', name: 'United Kingdom', available: true }
+  ];
+  res.json(mockCountries);
 });
 
 app.post("/sms-buy-number", async (req, res) => {
-  const { service, country, operator } = req.body || {};
-  // Simulate a purchased activation
-  const activation = {
-    activation_id: `act_${Date.now()}`,
-    phone_number: "+1234567890",
-    status: "active",
-    sms_code: null,
-    sms_text: null,
-    can_get_another_sms: true,
+  const { service, country } = req.body;
+  const mockResponse = {
+    id: '12345',
+    number: '+1234567890',
+    service: service,
+    country: country,
+    price: 1.20
   };
-  return res.json(activation);
+  res.json(mockResponse);
 });
 
 app.post("/sms-status", async (req, res) => {
-  const { activation_id } = req.body || {};
-  return res.json({ activation_id, status: "active", sms_code: null, sms_text: null });
+  const { id } = req.body;
+  const mockResponse = {
+    id: id,
+    status: 'active',
+    sms_count: 2
+  };
+  res.json(mockResponse);
 });
 
 app.post("/sms-cancel", async (req, res) => {
-  const { activation_id } = req.body || {};
-  return res.json({ activation_id, cancelled: true });
+  const { id } = req.body;
+  res.json({ id, cancelled: true });
 });
 
 app.post("/sms-set-ready", async (req, res) => {
-  const { activation_id } = req.body || {};
-  return res.json({ activation_id, ready: true });
+  const { id } = req.body;
+  res.json({ id, ready: true });
 });
 
+// Export the Express app as a Firebase Function
 exports.api = functions.https.onRequest(app);

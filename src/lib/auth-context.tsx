@@ -9,6 +9,7 @@ interface AuthContextType {
   loading: boolean;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
+  setProfileLocal?: (profile: UserProfile | null) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -26,6 +27,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.error("Error loading profile:", error);
     }
   };
+
+  const setProfileLocal = (p: UserProfile | null) => setProfile(p);
 
   const refreshProfile = async () => {
     if (user) {
@@ -54,7 +57,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, profile, loading, signOut, refreshProfile }}>
+    <AuthContext.Provider value={{ user, profile, loading, signOut, refreshProfile, setProfileLocal }}>
       {children}
     </AuthContext.Provider>
   );

@@ -151,7 +151,7 @@ const Login = () => {
   /* -------------------- UI -------------------- */
   return (
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-b from-background to-muted/30 p-4">
-      <Card className="w-full max-w-md border border">
+      <Card className="w-full max-w-md border">
         <CardHeader className="text-center">
           <Link to="/" className="flex justify-center mb-4">
             <img src={logo} alt="SMSGlobe" className="h-16" />

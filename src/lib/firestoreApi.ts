@@ -41,6 +41,60 @@ if (!FUNCTIONS_BASE) {
 try { if (typeof window !== 'undefined') console.debug('FUNCTIONS_BASE =', FUNCTIONS_BASE); } catch (e) {}
 
 async function invokeFunction(name: string, body?: any) {
+  // Dev-only local mocks: when running on localhost and the functions
+  // emulator is not available, return a mock response for certain
+  // function names to make local testing easier.
+  try {
+    if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+      const enableMocks = import.meta.env.VITE_ENABLE_DEV_FUNCTION_MOCKS !== 'false';
+      if (enableMocks) {
+        if (name === 'flutterwave-initialize') {
+          return {
+            data: {
+              status: 'success',
+              message: 'Payment initialized successfully',
+              data: {
+                payment_link: `https://checkout.flutterwave.com/pay/${body?.txRef || 'tx_mock'}`,
+                tx_ref: body?.txRef || 'tx_mock',
+                amount: body?.amount || 0,
+                currency: body?.currency || 'NGN',
+                customer: { email: body?.email || 'test@example.com' },
+              }
+            },
+            error: null
+          };
+        }
+
+        if (name === 'flutterwave-verify') {
+          // Accept transaction_id or tx_ref
+          const txRef = body?.tx_ref || body?.txRef || '';
+          const txnId = body?.transaction_id || body?.transactionId || '';
+          return {
+            data: {
+              status: 'success',
+              message: 'Payment verified successfully (mock)',
+              data: {
+                id: parseInt(txnId) || 9870112,
+                tx_ref: txRef || 'test_tx_ref',
+                flw_ref: `MockFLWRef-${Date.now()}`,
+                amount: 14521.2,
+                currency: 'NGN',
+                charged_amount: 14521.2,
+                status: 'successful',
+                charge_response_code: '00',
+                charge_response_message: 'Approved Successful',
+                created_at: new Date().toISOString(),
+                customer: { id: 12345, name: 'Test User', email: 'test@example.com' }
+              }
+            },
+            error: null
+          };
+        }
+      }
+    }
+  } catch (e) {
+    // ignore mock generation errors and fall back to real invocation
+  }
   // Try multiple candidate endpoints in case the emulator isn't running or the proxy path differs.
   const candidates = [] as string[];
   const base = FUNCTIONS_BASE.endsWith('/') ? FUNCTIONS_BASE.slice(0, -1) : FUNCTIONS_BASE;

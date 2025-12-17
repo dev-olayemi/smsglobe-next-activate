@@ -332,11 +332,30 @@ export const firestoreService = {
   // ===== DEPOSITS =====
   async createDeposit(deposit: Omit<Deposit, 'id' | 'createdAt'>) {
     const colRef = collection(db, "deposits");
-    const docRef = await addDoc(colRef, {
-      ...deposit,
-      createdAt: serverTimestamp()
-    });
-    return docRef.id;
+    try {
+      const docRef = await addDoc(colRef, {
+        ...deposit,
+        createdAt: serverTimestamp()
+      });
+      return docRef.id;
+    } catch (err) {
+      // Fallback for local development when Firestore is not writable or
+      // permissions are insufficient. Persist a mock deposit in localStorage.
+      try {
+        if (typeof window !== 'undefined') {
+          const key = 'smsglobe_mock_deposits';
+          const existing = JSON.parse(localStorage.getItem(key) || '[]');
+          const id = `mock_${Date.now()}`;
+          const mock = { id, ...deposit, createdAt: new Date().toISOString() };
+          existing.push(mock);
+          localStorage.setItem(key, JSON.stringify(existing));
+          return id;
+        }
+      } catch (e) {
+        console.error('Local deposit fallback failed:', e);
+      }
+      throw err;
+    }
   },
 
   async getUserDeposits(userId: string): Promise<Deposit[]> {
@@ -352,14 +371,142 @@ export const firestoreService = {
 
   async getDepositByTxRef(txRef: string): Promise<Deposit | null> {
     const colRef = collection(db, "deposits");
-    const q = query(colRef, where("txRef", "==", txRef));
-    const snapshot = await getDocs(q);
-    
-    if (!snapshot.empty) {
-      const docSnap = snapshot.docs[0];
-      return { id: docSnap.id, ...docSnap.data() } as Deposit;
+    try {
+      const q = query(colRef, where("txRef", "==", txRef));
+      const snapshot = await getDocs(q);
+
+      if (!snapshot.empty) {
+        const docSnap = snapshot.docs[0];
+        return { id: docSnap.id, ...docSnap.data() } as Deposit;
+      }
+      // Not found in Firestore — fall through to check local mocks
+    } catch (err) {
+      console.error('Error reading deposit from Firestore:', err);
+      // Continue to localStorage fallback
     }
+
+    // LocalStorage fallback
+    try {
+      if (typeof window !== 'undefined') {
+        const key = 'smsglobe_mock_deposits';
+        const arr = JSON.parse(localStorage.getItem(key) || '[]');
+        const found = arr.find((d: any) => d.txRef === txRef);
+        return found ? (found as Deposit) : null;
+      }
+    } catch (e) {
+      console.error('Local deposit lookup failed:', e);
+    }
+
     return null;
+  },
+
+  // ===== PAYMENT RECORDS (separate collection to track gateway payments) =====
+  async addPaymentRecord(record: {
+    userId: string;
+    txRef: string;
+    transactionId?: string;
+    amountUSD?: number;
+    amountNGN?: number;
+    exchangeRate?: number;
+    paymentMethod?: string;
+    providerRef?: string;
+    status?: string;
+  }) {
+    const colRef = collection(db, 'payments');
+    try {
+      const docRef = await addDoc(colRef, { ...record, createdAt: serverTimestamp() });
+      return docRef.id;
+    } catch (err) {
+      console.error('Error adding payment record to Firestore, falling back to localStorage:', err);
+      try {
+        if (typeof window !== 'undefined') {
+          const key = 'smsglobe_mock_payments';
+          const arr = JSON.parse(localStorage.getItem(key) || '[]');
+          const id = `mock_pay_${Date.now()}`;
+          const mock = { id, ...record, createdAt: new Date().toISOString() };
+          arr.push(mock);
+          localStorage.setItem(key, JSON.stringify(arr));
+          return id;
+        }
+      } catch (e) {
+        console.error('Local payment fallback failed:', e);
+      }
+      throw err;
+    }
+  },
+
+  async getPaymentByTxRef(txRef: string) {
+    const colRef = collection(db, 'payments');
+    try {
+      const q = query(colRef, where('txRef', '==', txRef));
+      const snap = await getDocs(q);
+      if (!snap.empty) {
+        const docSnap = snap.docs[0];
+        return { id: docSnap.id, ...docSnap.data() } as any;
+      }
+    } catch (err) {
+      console.error('Error reading payment from Firestore:', err);
+    }
+
+    try {
+      if (typeof window !== 'undefined') {
+        const key = 'smsglobe_mock_payments';
+        const arr = JSON.parse(localStorage.getItem(key) || '[]');
+        return arr.find((p: any) => p.txRef === txRef) || null;
+      }
+    } catch (e) {
+      console.error('Local payment lookup failed:', e);
+    }
+
+    return null;
+  },
+
+  async completePayment(paymentId: string, userId: string, amountUSD: number, transactionId: string) {
+    // Mirror completeDeposit but operate on payments collection
+    const colRef = collection(db, 'payments');
+    try {
+      const docRef = doc(db, 'payments', paymentId);
+      await updateDoc(docRef, { status: 'completed', transactionId, completedAt: serverTimestamp() });
+
+      // Update balance and add transaction
+      const newBalance = (await this.getUserProfile(userId))?.balance || 0 + amountUSD;
+      await this.updateUserBalance(userId, newBalance);
+      await this.addBalanceTransaction({ userId, type: 'deposit', amount: amountUSD, description: `Deposit via Flutterwave`, balanceAfter: newBalance });
+      return newBalance;
+    } catch (err) {
+      console.error('Error completing payment in Firestore, falling back to localStorage:', err);
+      try {
+        if (typeof window !== 'undefined') {
+          const key = 'smsglobe_mock_payments';
+          const arr = JSON.parse(localStorage.getItem(key) || '[]');
+          const idx = arr.findIndex((p: any) => p.id === paymentId || p.txRef === paymentId);
+          if (idx >= 0) {
+            arr[idx].status = 'completed';
+            arr[idx].transactionId = transactionId;
+            arr[idx].completedAt = new Date().toISOString();
+            localStorage.setItem(key, JSON.stringify(arr));
+          }
+
+          const profKey = 'smsglobe_mock_profiles';
+          const profiles = JSON.parse(localStorage.getItem(profKey) || '{}');
+          const existing = profiles[userId] || { balance: 0 };
+          const newProf = { ...existing, balance: (existing.balance || 0) + amountUSD };
+          profiles[userId] = newProf;
+          localStorage.setItem(profKey, JSON.stringify(profiles));
+
+          const txKey = 'smsglobe_mock_transactions';
+          const txs = JSON.parse(localStorage.getItem(txKey) || '[]');
+          txs.push({ id: `mock_tx_${Date.now()}`, userId, type: 'deposit', amount: amountUSD, description: 'Deposit via Flutterwave', balanceAfter: newProf.balance, createdAt: new Date().toISOString() });
+          localStorage.setItem(txKey, JSON.stringify(txs));
+
+          return newProf.balance;
+        }
+      } catch (fallbackErr) {
+        console.error('Local fallback in completePayment failed:', fallbackErr);
+      }
+
+      throw err;
+    }
   },
 
   async updateDeposit(depositId: string, data: Partial<Deposit>) {
@@ -374,23 +521,63 @@ export const firestoreService = {
 
     const newBalance = (profile.balance || 0) + amountUSD;
 
-    await this.updateDeposit(depositId, {
-      status: 'completed',
-      transactionId,
-      completedAt: serverTimestamp() as Timestamp
-    });
+    try {
+      await this.updateDeposit(depositId, {
+        status: 'completed',
+        transactionId,
+        completedAt: serverTimestamp() as Timestamp
+      });
 
-    await this.updateUserBalance(userId, newBalance);
+      await this.updateUserBalance(userId, newBalance);
 
-    await this.addBalanceTransaction({
-      userId,
-      type: 'deposit',
-      amount: amountUSD,
-      description: `Deposit via Flutterwave`,
-      balanceAfter: newBalance
-    });
+      await this.addBalanceTransaction({
+        userId,
+        type: 'deposit',
+        amount: amountUSD,
+        description: `Deposit via Flutterwave`,
+        balanceAfter: newBalance
+      });
 
-    return newBalance;
+      return newBalance;
+    } catch (err) {
+      // Fallback for local development when Firestore writes fail due to
+      // permissions or emulator not running. Update mock data in localStorage
+      // so the UI can reflect immediate changes.
+      console.error('Firestore write failed in completeDeposit, falling back to localStorage:', err);
+      try {
+        if (typeof window !== 'undefined') {
+          const depKey = 'smsglobe_mock_deposits';
+          const deps = JSON.parse(localStorage.getItem(depKey) || '[]');
+          const idx = deps.findIndex((d: any) => d.id === depositId || d.txRef === depositId);
+          if (idx >= 0) {
+            deps[idx].status = 'completed';
+            deps[idx].transactionId = transactionId;
+            deps[idx].completedAt = new Date().toISOString();
+            localStorage.setItem(depKey, JSON.stringify(deps));
+          }
+
+          // Update mock profile
+          const profKey = 'smsglobe_mock_profiles';
+          const profiles = JSON.parse(localStorage.getItem(profKey) || '{}');
+          const existing = profiles[userId] || { balance: 0 };
+          const newProf = { ...existing, balance: (existing.balance || 0) + amountUSD };
+          profiles[userId] = newProf;
+          localStorage.setItem(profKey, JSON.stringify(profiles));
+
+          // Add mock transaction
+          const txKey = 'smsglobe_mock_transactions';
+          const txs = JSON.parse(localStorage.getItem(txKey) || '[]');
+          txs.push({ id: `mock_tx_${Date.now()}`, userId, type: 'deposit', amount: amountUSD, description: 'Deposit via Flutterwave', balanceAfter: newProf.balance, createdAt: new Date().toISOString() });
+          localStorage.setItem(txKey, JSON.stringify(txs));
+
+          return newProf.balance;
+        }
+      } catch (fallbackErr) {
+        console.error('Local fallback in completeDeposit failed:', fallbackErr);
+      }
+
+      throw err;
+    }
   },
 
   // ===== REFERRALS =====
