@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,7 +10,13 @@ import { toast } from "sonner";
 import { useAuth } from "@/lib/auth-context";
 import { firestoreService } from "@/lib/firestore-service";
 import { getUsdToNgnRate, usdToNgn, formatCurrency } from "@/lib/currency";
-import firestoreApi from "@/lib/firestoreApi";
+
+// Type for FlutterwaveCheckout (global function)
+declare global {
+  interface Window {
+    FlutterwaveCheckout: (config: any) => void;
+  }
+}
 
 interface TopUpModalProps {
   open: boolean;
@@ -18,6 +25,7 @@ interface TopUpModalProps {
 }
 
 export const TopUpModal = ({ open, onOpenChange, onSuccess }: TopUpModalProps) => {
+  const navigate = useNavigate();
   const { user, profile } = useAuth();
   const [amount, setAmount] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("flutterwave");
@@ -32,11 +40,21 @@ export const TopUpModal = ({ open, onOpenChange, onSuccess }: TopUpModalProps) =
 
   const quickAmounts = [5, 10, 25, 50, 100, 250];
 
+  // Load Flutterwave script once
+  useEffect(() => {
+    const script = document.createElement("script");
+    script.src = "https://checkout.flutterwave.com/v3.js";
+    script.async = true;
+    document.body.appendChild(script);
+
+    return () => {
+      document.body.removeChild(script);
+    };
+  }, []);
+
   // Fetch exchange rate when modal opens
   useEffect(() => {
-    if (open) {
-      fetchExchangeRate();
-    }
+    if (open) fetchExchangeRate();
   }, [open]);
 
   const fetchExchangeRate = async () => {
@@ -71,56 +89,69 @@ export const TopUpModal = ({ open, onOpenChange, onSuccess }: TopUpModalProps) =
     }
 
     setLoading(true);
+
     try {
-      // Generate unique transaction reference
       const txRef = `txn_${Date.now()}_${user.uid.slice(0, 8)}`;
 
-      // Create deposit record in Firebase
       const depositId = await firestoreService.createDeposit({
         userId: user.uid,
         amountUSD: amountNum,
         amountNGN: ngnAmount,
-        exchangeRate: exchangeRate,
-        status: 'pending',
-        paymentMethod: 'flutterwave',
-        txRef: txRef,
+        exchangeRate,
+        status: "pending",
+        paymentMethod: "flutterwave",
+        txRef,
       });
 
-      // Initialize Flutterwave payment via edge function
-      const { data, error } = await firestoreApi.invokeFunction("flutterwave-initialize", {
+      const publicKey = import.meta.env.VITE_PUBLIC_FLW_PUBLIC_KEY || "FLWPUBK_TEST-fd0d29a75c03d4f19df73e0d6ac9fbfa-X";
+
+      if (typeof window.FlutterwaveCheckout !== "function") {
+        throw new Error("Flutterwave script not loaded yet. Try again.");
+      }
+
+      window.FlutterwaveCheckout({
+        public_key: publicKey,
+        tx_ref: txRef,
         amount: ngnAmount,
-        amountUSD: amountNum,
-        email: profile.email,
-        txRef: txRef,
-        userId: user.uid,
-        depositId: depositId,
-        currency: 'NGN',
+        currency: "NGN",
+        payment_options: "card,banktransfer,ussd",
+        meta: {
+          userId: user.uid,
+          depositId,
+          amountUSD: amountNum,
+        },
+        customer: {
+          email: profile.email,
+          name: profile.displayName || profile.email.split("@")[0],
+        },
+        customizations: {
+          title: "SMSGlobe Top Up",
+          description: `Add ${formatCurrency(amountNum, "USD")} to your balance`,
+        },
+        callback: (data: any) => {
+          if (data?.status === "successful" || data?.status === "completed") {
+            toast.success("Payment received! Verifying and updating your balance...");
+            const params = new URLSearchParams({
+              transaction_id: String(data.transaction_id || ""),
+              tx_ref: data.tx_ref || txRef,
+              status: "completed",
+            });
+            onOpenChange(false);
+            onSuccess();
+            navigate(`/payment-callback?${params.toString()}`);
+          } else {
+            toast.error("Payment failed or incomplete.");
+            setLoading(false);
+          }
+        },
+        onclose: () => {
+          toast.info("Payment cancelled.");
+          setLoading(false);
+        },
       });
-
-      if (error) throw error;
-
-      if (data?.payment_link) {
-        toast.success("Opening payment gateway in a new tab...");
-        // open in new tab so user can return to app easily
-        window.open(data.payment_link, "_blank");
-        // Close the modal after opening payment
-        onOpenChange(false);
-        onSuccess();
-      } else {
-        throw new Error("No payment link received");
-      }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Top up error:", error);
-      // If the error comes from invokeFunction it may include helpful details
-      const err = error as any;
-      if (err && err.url) {
-        toast.error(`Failed to contact payment endpoint (${err.url}). Check emulator or functions deployment.`);
-      } else if (err && err.message) {
-        toast.error(err.message);
-      } else {
-        toast.error("Failed to initiate payment. Please try again.");
-      }
-    } finally {
+      toast.error(error?.message || "Failed to start payment. Please try again.");
       setLoading(false);
     }
   };

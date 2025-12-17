@@ -58,8 +58,15 @@ service cloud.firestore {
       allow create: if isOwner(incomingData().userId)
                     && incomingData().amount > 0
                     && incomingData().status == "pending";
-      allow update: if isAdmin(); // Only admin approves/completes deposits
+      // completion happens server-side after verification
+      allow update: if isAdmin();
       allow delete: if isAdmin();
+    }
+
+    // ===== PAYMENT RECEIPTS (server-written, user/admin readable) =====
+    match /payments/{docId} {
+      allow read: if isOwner(resource.data.userId) || isAdmin();
+      allow create, update, delete: if isAdmin();
     }
 
     // ===== ORDERS + ACTIVE ORDERS =====

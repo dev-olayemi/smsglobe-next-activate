@@ -335,6 +335,8 @@ export const firestoreService = {
     try {
       const docRef = await addDoc(colRef, {
         ...deposit,
+        // For compatibility with Firestore rules expecting `amount`
+        amount: Number((deposit as any).amountNGN ?? 0),
         createdAt: serverTimestamp()
       });
       return docRef.id;

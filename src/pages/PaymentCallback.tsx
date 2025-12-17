@@ -29,9 +29,9 @@ const PaymentCallback = () => {
     const txRef = searchParams.get("tx_ref");
     const statusParam = searchParams.get("status");
 
-    if (!transactionId && !txRef) {
+    if (!txRef) {
       setStatus("failed");
-      setMessage("No transaction ID found");
+      setMessage("Missing transaction reference (tx_ref)");
       return;
     }
 
@@ -41,250 +41,64 @@ const PaymentCallback = () => {
       return;
     }
 
-    // In development, trust status=completed from callback URL and update DB with fallbacks
-    if (import.meta.env.DEV && statusParam === 'completed' && txRef) {
-      try {
-        const deposit = await firestoreService.getDepositByTxRef(txRef);
-        if (deposit && user) {
-          try {
-            await firestoreService.addPaymentRecord({
-              txRef,
-              transactionId: transactionId || '',
-              amountUSD: deposit.amountUSD,
-              amountNGN: deposit.amountNGN,
-              exchangeRate: deposit.exchangeRate || 0,
-              status: 'completed',
-              userId: user.uid,
-              createdAt: new Date(),
-            });
-          } catch (recErr) {
-            console.error('Failed to add payment record:', recErr);
-          }
-          try {
-            if (deposit.status === 'completed') {
-              setStatus("success");
-              setMessage("This payment has already been processed");
-              setAmountUSD(deposit.amountUSD);
-              setAmountNGN(deposit.amountNGN);
-              return;
-            }
-            const newBalance = await firestoreService.completeDeposit(
-              deposit.id,
-              user.uid,
-              deposit.amountUSD,
-              String(transactionId || deposit.transactionId || '')
-            );
-            try {
-              await refreshProfile();
-            } catch (e) {
-              console.warn('refreshProfile failed:', e);
-              if (typeof setProfileLocal === 'function') {
-                setProfileLocal({ ...(profile || {}), balance: newBalance } as any);
-              }
-            }
-            setStatus("success");
-            setAmountUSD(deposit.amountUSD);
-            setAmountNGN(deposit.amountNGN);
-            setMessage(`Successfully added ${formatCurrency(deposit.amountUSD, 'USD')} to your balance`);
-            toast.success("Payment successful!");
-          } catch (firebaseError) {
-            console.error("Firebase update error:", firebaseError);
-            setStatus("success");
-            setAmountUSD(deposit.amountUSD);
-            setAmountNGN(deposit.amountNGN);
-            setMessage(`Successfully added ${formatCurrency(deposit.amountUSD, 'USD')} to your balance (local update)`);
-            toast.success("Payment successful (local update)!");
-          }
-        } else {
-          setStatus('success');
-          setMessage('Payment verified successfully (dev mode).');
-          toast.success('Payment confirmed (dev fallback)');
-        }
-      } catch (fallbackErr) {
-        console.error('Dev fallback error:', fallbackErr);
-        setStatus('failed');
-        setMessage('Payment verification failed in dev mode.');
-      }
-      return;
-    }
-
     try {
-      // Verify payment with Flutterwave via edge function
+      setStatus("loading");
+      setMessage("");
+
       const { data, error } = await firestoreApi.invokeFunction("flutterwave-verify", {
         transaction_id: transactionId,
         tx_ref: txRef,
       });
 
-      // If the invocation returned an error, don't immediately throw — permit
-      // a dev-friendly fallback (below) when the callback URL indicates the
-      // provider reported completion (status=completed). Otherwise surface
-      // the error so the catch block handles it.
-      if (error && !(statusParam === 'completed' && txRef)) {
-        throw error;
+      if (error) {
+        throw new Error(error?.message || "Payment verification failed");
       }
 
-      if (data?.status === 'success' && (data?.data?.status === 'successful' || data?.data?.status === 'completed')) {
-        // Get deposit from Firebase using txRef
-        const deposit = await firestoreService.getDepositByTxRef(txRef || data.data.tx_ref);
-        
-        if (deposit && user) {
-          // Ensure we have a payment record for auditing
-          try {
-            const existingPayment = await firestoreService.getPaymentByTxRef(txRef || '');
-            if (!existingPayment) {
-              await firestoreService.addPaymentRecord({
-                userId: user.uid,
-                txRef: txRef || '',
-                transactionId: String(data.data.transaction_id || transactionId || ''),
-                amountUSD: deposit.amountUSD,
-                amountNGN: deposit.amountNGN,
-                exchangeRate: deposit.exchangeRate,
-                paymentMethod: deposit.paymentMethod || 'flutterwave',
-                providerRef: data.data?.flw_ref || '',
-                status: 'completed'
-              });
-            }
-          } catch (recErr) {
-            console.error('Failed to add payment record:', recErr);
-          }
-          try {
-            // Check if already completed
-            if (deposit.status === 'completed') {
-              setStatus("success");
-              setMessage("This payment has already been processed");
-              setAmountUSD(deposit.amountUSD);
-              setAmountNGN(deposit.amountNGN);
-              return;
-            }
+      if (data?.status !== "success") {
+        throw new Error(data?.message || "Payment verification failed");
+      }
 
+      const creditedUSD = Number(data?.receipt?.amountUSD ?? 0);
+      const paidNGN = Number(data?.receipt?.amountNGN ?? 0);
+      const newBalanceUSD = typeof data?.newBalanceUSD === "number" ? data.newBalanceUSD : undefined;
 
-            // Complete the deposit in Firebase (may fallback to localStorage)
-            const newBalance = await firestoreService.completeDeposit(
-              deposit.id,
-              user.uid,
-              deposit.amountUSD,
-              String(data.data.transaction_id || transactionId)
-            );
+      setAmountUSD(creditedUSD);
+      setAmountNGN(paidNGN);
+      setStatus("success");
+      setMessage(
+        data?.message ||
+          (creditedUSD > 0
+            ? `Successfully added ${formatCurrency(creditedUSD, "USD")} to your balance`
+            : "Payment verified successfully")
+      );
 
-            // Refresh the user profile; if that fails due to permissions, update locally
-            try {
-              await refreshProfile();
-            } catch (e) {
-              console.warn('refreshProfile failed:', e);
-              if (typeof setProfileLocal === 'function') {
-                setProfileLocal({ ...(profile || {}), balance: newBalance } as any);
-              }
-            }
+      // Update UI immediately (Header balance), then refresh from DB
+      if (typeof newBalanceUSD === "number" && typeof setProfileLocal === "function" && profile) {
+        setProfileLocal({ ...(profile as any), balance: newBalanceUSD });
+      }
 
-            setStatus("success");
-            setAmountUSD(deposit.amountUSD);
-            setAmountNGN(deposit.amountNGN);
-            setMessage(`Successfully added ${formatCurrency(deposit.amountUSD, 'USD')} to your balance`);
-            toast.success("Payment successful!");
-          } catch (firebaseError) {
-            console.error("Firebase update error:", firebaseError);
-            setStatus("success");
-            setAmountUSD(deposit.amountUSD);
-            setMessage("Payment verified! Your balance will be updated shortly.");
-            toast.warning("Payment verified. Balance updating...");
-          }
-        } else if (data.data?.amount) {
-          // Fallback to data from Flutterwave response
-          const amountNGN = data.data.amount;
-          const estimatedUSD = amountNGN ? amountNGN / 1000 : 0; // heuristic
-          try {
-            await firestoreService.addPaymentRecord({
-              userId: user?.uid || '',
-              txRef: txRef || data.data.tx_ref || '',
-              transactionId: String(data.data.transaction_id || transactionId || ''),
-              amountUSD: estimatedUSD,
-              amountNGN,
-              paymentMethod: 'flutterwave',
-              providerRef: data.data?.flw_ref || '',
-              status: 'completed'
-            });
-          } catch (recErr) {
-            console.error('Failed to add payment record from Flutterwave response:', recErr);
-          }
-          setStatus("success");
-          setAmountUSD(estimatedUSD);
-          setMessage("Payment verified successfully");
-        } else {
-          setStatus("success");
-          setMessage("Payment verified successfully");
+      try {
+        await refreshProfile();
+      } catch {
+        // ignore
+      }
+
+      toast.success(
+        creditedUSD > 0
+          ? `${formatCurrency(creditedUSD, "USD")} has been added to your balance`
+          : "Payment verified",
+        {
+          action: {
+            label: "View receipt",
+            onClick: () => navigate(`/receipt/${txRef}`),
+          },
         }
-      } else {
-        // If the function returned an error/unexpected status, but the
-        // callback URL indicates the gateway reported completion (e.g. ?status=completed),
-        // attempt a best-effort local fallback: find the deposit by tx_ref
-        // and mark it completed so the user is not incorrectly shown a failure
-        // when the verification endpoint is unreachable (dev only).
-        if (import.meta.env.DEV && ((statusParam === 'completed' && txRef) || (error && statusParam === 'completed' && txRef))) {
-          try {
-            let deposit = null;
-            try {
-              deposit = await firestoreService.getDepositByTxRef(txRef || '');
-            } catch (readErr) {
-              console.error('Error reading deposit during fallback:', readErr);
-              // If the read failed due to Firestore rules / permissions, don't
-              // treat this as an overall payment failure — trust provider
-              // and show success message while leaving DB update for server.
-              const msg = 'Payment verified by provider; unable to update balance due to permissions. Balance will be updated shortly.';
-              setStatus('success');
-              setMessage(msg);
-              toast.warning(msg);
-              return;
-            }
-
-            if (deposit && user) {
-              try {
-                // Try to complete the deposit without server verification
-                await firestoreService.completeDeposit(
-                  deposit.id,
-                  user.uid,
-                  deposit.amountUSD,
-                  String(transactionId || deposit.transactionId || '')
-                );
-                await refreshProfile();
-                setStatus('success');
-                setAmountUSD(deposit.amountUSD);
-                setAmountNGN(deposit.amountNGN || 0);
-                setMessage('Payment verified by provider; server verification endpoint unavailable. Balance updated.');
-                toast.success('Payment confirmed (fallback)');
-              } catch (writeErr) {
-                console.error('Error completing deposit during fallback:', writeErr);
-                const msg = 'Payment verified by provider; unable to update balance due to permissions. Balance will be updated shortly.';
-                setStatus('success');
-                setMessage(msg);
-                toast.warning(msg);
-              }
-            } else {
-              setStatus('success');
-              setMessage('Payment verified successfully (no server verification available).');
-            }
-          } catch (fallbackErr) {
-            console.error('Fallback verification error:', fallbackErr);
-            setStatus('failed');
-            setMessage('Payment verification failed');
-          }
-        } else {
-          setStatus("failed");
-          setMessage(data?.message || "Payment verification failed");
-        }
-      }
-    } catch (error: any) {
-      console.error("Verification error:", error);
-      const msg = String(error?.message || error?.toString() || '');
-      // If the error is a Firestore permissions issue, assume the payment
-      // was completed by the provider and defer DB updates to the server.
-      if (msg.toLowerCase().includes('permission') || error?.code === 'permission-denied' || msg.toLowerCase().includes('insufficient')) {
-        setStatus('success');
-        setMessage('Payment verified by provider; unable to update balance due to permissions. Balance will be updated shortly.');
-        toast.warning('Payment confirmed, pending server update');
-      } else {
-        setStatus("failed");
-        setMessage("An error occurred while verifying your payment");
-      }
+      );
+    } catch (err: any) {
+      console.error("Verification error:", err);
+      setStatus("failed");
+      setMessage(err?.message || "An error occurred while verifying your payment");
+      toast.error(err?.message || "Payment verification failed");
     }
   };
 
@@ -325,17 +139,29 @@ const PaymentCallback = () => {
                     </div>
                   )}
                 </div>
-                <Button onClick={() => {
-                  const redirectPath = localStorage.getItem('post_auth_redirect');
-                  if (redirectPath) {
-                    localStorage.removeItem('post_auth_redirect');
-                    navigate(redirectPath);
-                  } else {
-                    navigate("/dashboard");
-                  }
-                }} className="w-full">
-                  Continue
-                </Button>
+                <div className="flex gap-2 w-full">
+                  <Button
+                    variant="outline"
+                    onClick={() => navigate(`/receipt/${searchParams.get("tx_ref") || ""}`)}
+                    className="flex-1"
+                  >
+                    View receipt
+                  </Button>
+                  <Button
+                    onClick={() => {
+                      const redirectPath = localStorage.getItem("post_auth_redirect");
+                      if (redirectPath) {
+                        localStorage.removeItem("post_auth_redirect");
+                        navigate(redirectPath);
+                      } else {
+                        navigate("/dashboard");
+                      }
+                    }}
+                    className="flex-1"
+                  >
+                    Continue
+                  </Button>
+                </div>
               </div>
             )}
 
