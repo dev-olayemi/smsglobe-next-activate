@@ -101,7 +101,30 @@ const Dashboard = () => {
       return;
     }
 
-    toast.info("Purchasing number... (SMS API not connected yet)");
+    if (!user) return;
+
+    try {
+      setLoading(true);
+      toast.info("Purchasing SMS number...");
+
+      let result;
+      if (type === "rental") {
+        // Long-term rental
+        result = await smsApi.rentLTR(user.uid, service, days as 3 | 30 || 30);
+      } else {
+        // One-time activation (ignore country for SMS services)
+        result = await smsApi.requestMDN(user.uid, service);
+      }
+
+      toast.success(`SMS ${type === "rental" ? "rental" : "one-time"} number purchased successfully!`);
+      refreshProfile();
+      loadData();
+    } catch (error: any) {
+      console.error("Error purchasing SMS number:", error);
+      toast.error(error.message || "Failed to purchase SMS number");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleCancelActivation = async (id: string) => {

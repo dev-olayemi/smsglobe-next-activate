@@ -5,9 +5,10 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { auth } from "@/lib/auth";
 import { useEffect, useState } from "react";
 import logo from "/favicon.png";
-import { Menu, Wallet, Home, ShoppingBag, Receipt, Shield, CreditCard, Settings, User, Crown, LogOut, DollarSign, MessageSquare } from "lucide-react";
+import { Menu, Wallet, Home, ShoppingBag, Receipt, Shield, CreditCard, Settings, User, Crown, LogOut, DollarSign, MessageSquare, ChevronDown } from "lucide-react";
 import firestoreApi from "@/lib/firestoreApi";
 import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 
 type User = { uid: string; email?: string | null; displayName?: string | null; emailVerified?: boolean } | null;
@@ -80,6 +81,8 @@ export const Header = () => {
     { to: "/support", label: "Support", icon: Settings },
   ];
 
+  const desktopAuthNavItems = user ? authNavItems.filter(item => !['Dashboard', 'Orders', 'Transactions', 'Profile'].includes(item.label)) : [];
+
   const MobileBalanceAvatar = () => (
     <div className="flex items-center gap-3">
       {/* Compact Balance with USD Icon */}
@@ -113,7 +116,7 @@ export const Header = () => {
 
         {/* Desktop Navigation */}
         <nav className="hidden lg:flex items-center gap-8">
-          {(user ? authNavItems : publicNavItems).map((item) => (
+          {(user ? desktopAuthNavItems : publicNavItems).map((item) => (
             <Link
               key={item.to}
               to={item.to}
@@ -142,33 +145,65 @@ export const Header = () => {
         </nav>
 
         {/* Desktop Right Side */}
-        <div className="hidden md:flex items-center gap-4">
+        <div className="hidden md:flex items-center gap-2">
           {user ? (
             <>
               <Button variant="outline" size="sm" asChild>
                 <Link to="/top-up">Top Up</Link>
               </Button>
-              <div className="flex items-center gap-2 bg-muted/50 px-3 py-2 rounded-lg">
-                <Wallet className="h-5 w-5 text-primary" />
-                <div className="flex flex-col">
-                  <span className="text-xs text-muted-foreground">Balance</span>
-                  <span className="font-bold">
-                    ${balance !== null ? Number(balance).toFixed(2) : "0.00"} USD
-                  </span>
-                </div>
+              <div className="flex items-center gap-1 bg-muted/50 px-2 py-1 rounded-md">
+                <Wallet className="h-4 w-4 text-primary" />
+                <span className="text-sm font-bold">
+                  ${balance !== null ? Number(balance).toFixed(2) : "0.00"} USD
+                </span>
               </div>
-              <Avatar className="h-9 w-9 ring-2 ring-background">
-                <AvatarImage src={(user as any)?.photoURL} />
-                <AvatarFallback>
-                  {(user as any)?.displayName?.charAt(0).toUpperCase() ||
-                    (user as any)?.email?.charAt(0).toUpperCase() ||
-                    "U"}
-                </AvatarFallback>
-              </Avatar>
-              <Button variant="ghost" size="sm" onClick={handleLogout} className="gap-2">
-                <LogOut className="h-4 w-4" />
-                Logout
-              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="sm" className="flex items-center gap-1 p-0 hover:bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0">
+                    <Avatar className="h-9 w-9 ring-2 ring-background">
+                      <AvatarImage src={(user as any)?.photoURL || "/assets/resources/avater.png"} />
+                      <AvatarFallback>
+                        {(user as any)?.displayName?.charAt(0).toUpperCase() ||
+                          (user as any)?.email?.charAt(0).toUpperCase() ||
+                          "U"}
+                      </AvatarFallback>
+                    </Avatar>
+                    <ChevronDown className="h-4 w-4 text-black" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  <DropdownMenuLabel>
+                    <div className="flex flex-col space-y-1">
+                      <p className="text-sm font-medium leading-none">
+                        {(user as any)?.displayName || (user as any)?.email}
+                      </p>
+                      {(user as any)?.displayName && (
+                        <p className="text-xs leading-none text-muted-foreground">
+                          {(user as any)?.email}
+                        </p>
+                      )}
+                    </div>
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem asChild>
+                    <Link to="/dashboard">Dashboard</Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link to="/orders">Orders</Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link to="/transactions">Transactions</Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link to="/profile">Profile</Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={handleLogout}>
+                    <LogOut className="mr-2 h-4 w-4" />
+                    <span>Logout</span>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </>
           ) : (
             <>

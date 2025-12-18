@@ -613,6 +613,20 @@ export const firestoreService = {
       balance: newBalance,
       updatedAt: serverTimestamp()
     });
+
+    // Update user_balances collection
+    const balanceRef = doc(db, "user_balances", referrerId);
+    const balanceSnap = await getDoc(balanceRef);
+    if (balanceSnap.exists()) {
+      const balanceData = balanceSnap.data();
+      await updateDoc(balanceRef, {
+        balanceUSD: newBalance,
+        referralEarningsUSD: newReferralEarnings,
+        totalTransactionsCount: Number(balanceData.totalTransactionsCount || 0) + 1,
+        lastTransactionAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+    }
     
     await this.addBalanceTransaction({
       userId: referrerId,
@@ -849,6 +863,20 @@ export const firestoreService = {
     
     // Deduct balance
     await this.updateUserBalance(userId, newBalance);
+    
+    // Update user_balances collection
+    const balanceRef = doc(db, "user_balances", userId);
+    const balanceSnap = await getDoc(balanceRef);
+    if (balanceSnap.exists()) {
+      const balanceData = balanceSnap.data();
+      await updateDoc(balanceRef, {
+        balanceUSD: newBalance,
+        totalSpentUSD: Number(balanceData.totalSpentUSD || 0) + product.price,
+        totalTransactionsCount: Number(balanceData.totalTransactionsCount || 0) + 1,
+        lastTransactionAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+    }
     
     // Record transaction
     await this.addBalanceTransaction({

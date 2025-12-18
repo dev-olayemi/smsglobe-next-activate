@@ -146,6 +146,47 @@ app.post("/flutterwave-verify", async (req, res) => {
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
 
+      // Update or create user balance record
+      const balanceRef = db.collection("user_balances").doc(String(userId));
+      const balanceSnap = await t.get(balanceRef);
+      const existingBalance = balanceSnap.exists ? balanceSnap.data() : null;
+
+      if (existingBalance) {
+        // Update existing balance
+        t.update(balanceRef, {
+          balanceUSD: newBalanceUSD,
+          totalDepositedUSD: Number(existingBalance.totalDepositedUSD || 0) + amountUSD,
+          totalDepositsCount: Number(existingBalance.totalDepositsCount || 0) + 1,
+          totalTransactionsCount: Number(existingBalance.totalTransactionsCount || 0) + 1,
+          lastDepositAt: admin.firestore.FieldValue.serverTimestamp(),
+          lastTransactionAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      } else {
+        // Create new balance record
+        const userData = userSnap.data() || {};
+        t.set(balanceRef, {
+          id: String(userId),
+          userId: String(userId),
+          userEmail: userData.email || '',
+          username: userData.username || '',
+          balanceUSD: newBalanceUSD,
+          totalDepositedUSD: amountUSD,
+          totalSpentUSD: 0,
+          currency: 'USD',
+          lastDepositAt: admin.firestore.FieldValue.serverTimestamp(),
+          lastTransactionAt: admin.firestore.FieldValue.serverTimestamp(),
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          pendingDeposits: 0,
+          totalDepositsCount: 1,
+          totalTransactionsCount: 1,
+          referralEarningsUSD: Number(userData.referralEarnings || 0),
+          cashbackUSD: Number(userData.cashback || 0),
+          useCashbackFirst: userData.useCashbackFirst || false,
+        });
+      }
+
       // Record balance transaction
       const balTxRef = db.collection("balance_transactions").doc();
       t.set(balTxRef, {

@@ -202,7 +202,7 @@ const TopUp = () => {
             </div>
           </div>
 
-          {/* Exchange Rate & NGN Amount Display */}
+          {/* Exchange Rate & NGN Amount Display */} 
           {amountNum > 0 && (
             <div className="p-6 rounded-lg bg-muted/50 border space-y-3">
               <div className="flex items-center justify-between">

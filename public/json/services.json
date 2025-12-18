@@ -8,6 +8,13 @@
             "ltr_short_price": "1.08",
             "available": "253",
             "ltr_available": "3230",
+            "icon": "https://ui-avatars.com/api/?name=101Plus&background=0D9488&color=fff&size=64",
+            "countries": {
+                "12": "0.30",
+                "36": "0.35",
+                "16": "0.25",
+                "22": "0.20"
+            },
             "recommended_markup": ""
         },
         {
@@ -17,6 +24,13 @@
             "ltr_short_price": "1.08",
             "available": "253",
             "ltr_available": "4173",
+            "icon": "https://ui-avatars.com/api/?name=2RedBeans&background=0D9488&color=fff&size=64",
+            "countries": {
+                "12": "0.32",
+                "36": "0.38",
+                "16": "0.27",
+                "22": "0.22"
+            },
             "recommended_markup": ""
         },
         {

@@ -1,11 +1,10 @@
 import { useState, useEffect } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/lib/auth-context";
 import { firestoreService, ProductListing, ProductCategory } from "@/lib/firestore-service";
 import { toast } from "sonner";
@@ -29,25 +28,22 @@ const categoryLabels: Record<ProductCategory, string> = {
 
 const Marketplace = () => {
   const navigate = useNavigate();
-  const { category } = useParams<{ category?: string }>();
   const { user, profile, refreshProfile } = useAuth();
   const [products, setProducts] = useState<ProductListing[]>([]);
   const [loading, setLoading] = useState(true);
   const [purchasing, setPurchasing] = useState<string | null>(null);
-  const [activeCategory, setActiveCategory] = useState<ProductCategory | 'all'>(
-    (category as ProductCategory) || 'all'
-  );
+
+  // Exchange rate: 1 USD = 1500 NGN (approximate)
+  const USD_TO_NGN = 1500;
 
   useEffect(() => {
     loadProducts();
-  }, [activeCategory]);
+  }, []);
 
   const loadProducts = async () => {
     setLoading(true);
     try {
-      const data = await firestoreService.getProductListings(
-        activeCategory === 'all' ? undefined : activeCategory
-      );
+      const data = await firestoreService.getProductListings();
       setProducts(data);
     } catch (error) {
       console.error("Error loading products:", error);
@@ -56,6 +52,14 @@ const Marketplace = () => {
       setLoading(false);
     }
   };
+
+  const groupedProducts = products.reduce((acc, product) => {
+    if (!acc[product.category]) {
+      acc[product.category] = [];
+    }
+    acc[product.category].push(product);
+    return acc;
+  }, {} as Record<ProductCategory, ProductListing[]>);
 
   const handlePurchase = async (product: ProductListing) => {
     if (!user) {
@@ -119,110 +123,97 @@ const Marketplace = () => {
             </Card>
           )}
 
-          {/* Category Tabs */}
-          <Tabs value={activeCategory} onValueChange={(v) => setActiveCategory(v as ProductCategory | 'all')}>
-            <TabsList className="w-full flex-wrap h-auto gap-2 bg-transparent p-0">
-              <TabsTrigger 
-                value="all" 
-                className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
-              >
-                All
-              </TabsTrigger>
-              {(Object.keys(categoryLabels) as ProductCategory[]).map((cat) => (
-                <TabsTrigger 
-                  key={cat} 
-                  value={cat}
-                  className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground flex items-center gap-2"
-                >
-                  {categoryIcons[cat]}
-                  {categoryLabels[cat]}
-                </TabsTrigger>
-              ))}
-            </TabsList>
+          {loading ? (
+            <div className="flex justify-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            </div>
+          ) : (
+            <div className="space-y-12">
+              {(Object.keys(categoryLabels) as ProductCategory[]).map((cat) => {
+                const categoryProducts = groupedProducts[cat] || [];
+                if (categoryProducts.length === 0) return null;
 
-            <TabsContent value={activeCategory} className="mt-6">
-              {loading ? (
-                <div className="flex justify-center py-12">
-                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                </div>
-              ) : products.length === 0 ? (
-                <Card>
-                  <CardContent className="py-12 text-center">
-                    <p className="text-muted-foreground">
-                      No products available in this category yet.
-                    </p>
-                  </CardContent>
-                </Card>
-              ) : (
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                  {products.map((product) => (
-                    <Card key={product.id} className="flex flex-col">
-                      <CardHeader>
-                        <div className="flex items-start justify-between">
-                          <div className="flex items-center gap-2">
-                            <div className="p-2 bg-primary/10 rounded-lg">
-                              {categoryIcons[product.category]}
+                return (
+                  <section key={cat}>
+                    <div className="flex items-center gap-3 mb-6">
+                      <div className="p-2 bg-primary/10 rounded-lg">
+                        {categoryIcons[cat]}
+                      </div>
+                      <h2 className="text-2xl font-bold">{categoryLabels[cat]}</h2>
+                      <Badge variant="secondary">{categoryProducts.length} products</Badge>
+                    </div>
+
+                    <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                      {categoryProducts.map((product) => (
+                        <Card key={product.id} className="overflow-hidden hover:shadow-lg transition-shadow duration-300 group">
+                          <CardHeader className="p-0 relative">
+                            <div className="h-48 bg-gradient-to-br from-muted to-muted/50 flex items-center justify-center overflow-hidden">
+                              <img
+                                src={product.image || 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=300&h=200&fit=crop'}
+                                alt={product.name}
+                                className="object-cover h-full w-full group-hover:scale-105 transition-transform duration-300"
+                              />
                             </div>
-                            <Badge variant="secondary">
+                            <Badge
+                              variant="default"
+                              className="absolute top-3 left-3 text-xs font-medium"
+                            >
                               {categoryLabels[product.category]}
                             </Badge>
-                          </div>
-                          <span className="text-xl font-bold text-primary">
-                            ${product.price.toFixed(2)}
-                          </span>
-                        </div>
-                        <CardTitle className="mt-3">{product.name}</CardTitle>
-                        <CardDescription>{product.description}</CardDescription>
-                      </CardHeader>
-                      <CardContent className="flex-1 flex flex-col">
-                        {/* Features */}
-                        {product.features && product.features.length > 0 && (
-                          <ul className="space-y-2 mb-4">
-                            {product.features.map((feature, idx) => (
-                              <li key={idx} className="flex items-center gap-2 text-sm">
-                                <Check className="h-4 w-4 text-green-500" />
-                                {feature}
-                              </li>
-                            ))}
-                          </ul>
-                        )}
-                        
-                        {/* Duration/Region */}
-                        <div className="flex flex-wrap gap-2 mb-4">
-                          {product.duration && (
-                            <Badge variant="outline" className="flex items-center gap-1">
-                              <Clock className="h-3 w-3" />
-                              {product.duration}
-                            </Badge>
-                          )}
-                          {product.region && (
-                            <Badge variant="outline">
-                              {product.region}
-                            </Badge>
-                          )}
-                        </div>
-
-                        <div className="mt-auto">
-                          <Button 
-                            className="w-full"
-                            onClick={() => handlePurchase(product)}
-                            disabled={purchasing === product.id}
-                          >
-                            {purchasing === product.id ? (
-                              <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                            ) : (
-                              <ShoppingCart className="h-4 w-4 mr-2" />
+                            {product.outOfStock && (
+                              <Badge variant="destructive" className="absolute top-3 right-3 text-xs">
+                                Out of Stock
+                              </Badge>
                             )}
-                            Purchase
-                          </Button>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              )}
-            </TabsContent>
-          </Tabs>
+                          </CardHeader>
+
+                          <CardContent className="p-4">
+                            <div className="text-sm text-muted-foreground mb-1">{product.provider}</div>
+                            <h3 className="font-semibold text-lg mb-2 line-clamp-2">{product.name}</h3>
+                            <div className="text-sm text-muted-foreground mb-3">{product.validity} • {product.dataAmount}</div>
+                            {product.features && product.features.length > 0 && (
+                              <div className="flex flex-wrap gap-1 mb-3">
+                                {product.features.slice(0, 2).map((feature: string, idx: number) => (
+                                  <Badge key={idx} variant="outline" className="text-xs">
+                                    {feature}
+                                  </Badge>
+                                ))}
+                                {product.features.length > 2 && (
+                                  <Badge variant="outline" className="text-xs">
+                                    +{product.features.length - 2} more
+                                  </Badge>
+                                )}
+                              </div>
+                            )}
+                            <div className="flex items-center justify-between mb-4">
+                              <div className="font-bold text-xl text-primary">
+                                ₦{Number(product.price).toLocaleString()}
+                              </div>
+                              <div className="text-sm text-muted-foreground">
+                                ${(product.price / USD_TO_NGN).toFixed(2)} USD
+                              </div>
+                            </div>
+                            <Button 
+                              className="w-full"
+                              onClick={() => handlePurchase(product)}
+                              disabled={purchasing === product.id || product.outOfStock}
+                            >
+                              {purchasing === product.id ? (
+                                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                              ) : (
+                                <ShoppingCart className="h-4 w-4 mr-2" />
+                              )}
+                              {product.outOfStock ? 'Out of Stock' : 'Purchase'}
+                            </Button>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  </section>
+                );
+              })}
+            </div>
+          )}
         </div>
       </main>
       <Footer />

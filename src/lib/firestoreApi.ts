@@ -60,7 +60,7 @@ async function invokeFunction(name: string, body?: any) {
   // function names to make local testing easier.
   try {
     if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
-      const enableMocks = import.meta.env.VITE_ENABLE_DEV_FUNCTION_MOCKS !== 'false';
+      const enableMocks = import.meta.env.VITE_ENABLE_DEV_FUNCTION_MOCKS === 'true'; // Changed to only enable if explicitly set to 'true'
       if (enableMocks) {
         if (name === 'flutterwave-initialize') {
           return {

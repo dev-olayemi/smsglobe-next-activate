@@ -1,10 +1,10 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { firestoreService } from "@/lib/firestore-service";
+import 'dotenv/config';                // <‑‑ line 1: load .env into process.env
 
 // Tellabot API Configuration
 const TELLABOT_API_URL = "https://www.tellabot.com/sims/api_command.php";
-const API_KEY = "li7N6KjtJBJZa2irO7c8zCdVlYGps9jN";
-const USERNAME = "muhammed-tech"; // Tellabot account username
+const { TELL_A_BOT_API_KEY, TELL_A_BOT_USERNAME } = process.env;
 const MARKUP_PERCENTAGE = 0.5; // 50% markup
 
 // Common API response interface
@@ -17,6 +17,7 @@ export interface TellabotResponse {
 export interface SMSService {
   name: string;
   displayName: string;
+  icon?: string;
   basePrice: number;
   markupPrice: number;
   ltrPrice?: number;
@@ -91,8 +92,8 @@ export function calculateMarkupPrice(basePrice: number): number {
 
 export function buildApiParams(params: Record<string, any>): URLSearchParams {
   const searchParams = new URLSearchParams();
-  searchParams.append('user', USERNAME);
-  searchParams.append('api_key', API_KEY);
+  searchParams.append('user', TELL_A_BOT_USERNAME);
+  searchParams.append('TELL_A_BOT_API_KEY', TELL_A_BOT_API_KEY);
   Object.entries(params).forEach(([key, value]) => {
     if (value !== undefined && value !== null) {
       searchParams.append(key, value.toString());

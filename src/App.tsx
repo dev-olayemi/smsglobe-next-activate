@@ -25,6 +25,7 @@ import ProviderProducts from "./pages/ProviderProducts";
 import EsimCategories from "./pages/EsimCategories";
 import EsimCategoryProducts from "./pages/EsimCategoryProducts";
 import SMS from "./pages/SMS";
+import Marketplace from "./pages/Marketplace";
 
 const queryClient = new QueryClient();
 
@@ -48,6 +49,7 @@ const App = () => (
             <Route path="/esim-category/:category" element={<EsimCategoryProducts />} />
             <Route path="/vpn-and-proxy" element={<VpnAndProxy />} />
             <Route path="/sms" element={<SMS />} />
+            <Route path="/marketplace" element={<Marketplace />} />
             <Route path="/provider/:provider" element={<ProviderProducts />} />
             <Route path="/product/:slug" element={<ProductDetail />} />
             <Route path="/orders" element={<Orders />} />
