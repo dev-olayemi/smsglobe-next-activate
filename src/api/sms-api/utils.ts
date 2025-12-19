@@ -1,11 +1,22 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { firestoreService } from "@/lib/firestore-service";
-import 'dotenv/config';                // <‑‑ line 1: load .env into process.env
 
 // Tellabot API Configuration
 const TELLABOT_API_URL = "https://www.tellabot.com/sims/api_command.php";
-const { TELL_A_BOT_API_KEY, TELL_A_BOT_USERNAME } = process.env;
+
+// Environment variables with fallbacks and validation
+const TELL_A_BOT_API_KEY = import.meta.env.VITE_TELL_A_BOT_API_KEY;
+const TELL_A_BOT_USERNAME = import.meta.env.VITE_TELL_A_BOT_USERNAME;
 const MARKUP_PERCENTAGE = 0.5; // 50% markup
+
+// Validate required environment variables
+if (!TELL_A_BOT_API_KEY) {
+  throw new Error('Missing required environment variable: VITE_TELL_A_BOT_API_KEY');
+}
+
+if (!TELL_A_BOT_USERNAME) {
+  throw new Error('Missing required environment variable: VITE_TELL_A_BOT_USERNAME');
+}
 
 // Common API response interface
 export interface TellabotResponse {
