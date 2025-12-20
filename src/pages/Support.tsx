@@ -367,7 +367,7 @@ const Support = () => {
                           className="w-full"
                           onClick={() => setActiveTab("orders")}
                         >
-                          View All Orders
+                          View All Orders 
                         </Button>
                       </div>
                     ) : (
