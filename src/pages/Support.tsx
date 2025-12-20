@@ -275,24 +275,24 @@ const Support = () => {
       <Header />
       <main className="flex-1 container px-4 py-8">
         <div className="max-w-6xl mx-auto">
-          <div className="mb-8">
-            <h1 className="text-3xl font-bold mb-2">Support Center</h1>
-            <p className="text-muted-foreground">
+          <div className="mb-6 sm:mb-8">
+            <h1 className="text-2xl sm:text-3xl font-bold mb-2">Support Center</h1>
+            <p className="text-sm sm:text-base text-muted-foreground">
               Get help with your orders, track issues, and connect with our support team
             </p>
           </div>
 
           <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-            <TabsList className="grid w-full grid-cols-5">
-              <TabsTrigger value="overview">Overview</TabsTrigger>
-              <TabsTrigger value="orders">Order Tracking</TabsTrigger>
-              <TabsTrigger value="tickets">Support Tickets</TabsTrigger>
-              <TabsTrigger value="faq">FAQ</TabsTrigger>
-              <TabsTrigger value="contact">Contact</TabsTrigger>
+            <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
+              <TabsTrigger value="overview" className="text-xs sm:text-sm">Overview</TabsTrigger>
+              <TabsTrigger value="orders" className="text-xs sm:text-sm">Orders</TabsTrigger>
+              <TabsTrigger value="tickets" className="text-xs sm:text-sm">Tickets</TabsTrigger>
+              <TabsTrigger value="faq" className="text-xs sm:text-sm">FAQ</TabsTrigger>
+              <TabsTrigger value="contact" className="text-xs sm:text-sm">Contact</TabsTrigger>
             </TabsList>
 
             <TabsContent value="overview" className="space-y-6">
-              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
                 {/* Quick Actions */}
                 <Card>
                   <CardHeader>
@@ -348,15 +348,15 @@ const Support = () => {
                     {orders.slice(0, 3).length > 0 ? (
                       <div className="space-y-3">
                         {orders.slice(0, 3).map((order) => (
-                          <div key={order.id} className="flex items-center justify-between p-3 border rounded">
-                            <div className="flex items-center gap-2">
+                          <div key={order.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 border rounded gap-2">
+                            <div className="flex items-center gap-2 min-w-0 flex-1">
                               {categoryIcons[order.category]}
-                              <div>
-                                <p className="font-medium text-sm">{order.productName}</p>
+                              <div className="min-w-0 flex-1">
+                                <p className="font-medium text-sm truncate">{order.productName}</p>
                                 <p className="text-xs text-muted-foreground">#{order.id}</p>
                               </div>
                             </div>
-                            <Badge variant={order.status === 'completed' ? 'default' : 'secondary'}>
+                            <Badge variant={order.status === 'completed' ? 'default' : 'secondary'} className="self-start sm:self-center">
                               {order.status}
                             </Badge>
                           </div>
@@ -384,7 +384,7 @@ const Support = () => {
                       Support Stats
                     </CardTitle>
                   </CardHeader>
-                  <CardContent className="space-y-4">
+                  <CardContent className="space-y-3 sm:space-y-4">
                     <div className="flex justify-between items-center">
                       <span className="text-sm">Open Tickets</span>
                       <Badge variant="destructive">{tickets.filter(t => t.status === 'open').length}</Badge>
@@ -411,14 +411,15 @@ const Support = () => {
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div className="flex gap-2">
+                  <div className="flex flex-col sm:flex-row gap-2">
                     <Input
                       placeholder="Enter order ID or order number"
                       value={searchOrderId}
                       onChange={(e) => setSearchOrderId(e.target.value)}
                       onKeyPress={(e) => e.key === 'Enter' && searchOrder()}
+                      className="flex-1"
                     />
-                    <Button onClick={searchOrder}>
+                    <Button onClick={searchOrder} className="w-full sm:w-auto">
                       <Search className="h-4 w-4 mr-2" />
                       Search
                     </Button>
@@ -435,7 +436,7 @@ const Support = () => {
                         </div>
                       </CardHeader>
                       <CardContent className="space-y-4">
-                        <div className="grid md:grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                           <div>
                             <Label className="text-sm font-medium">Order Number</Label>
                             <p className="font-mono text-sm">{selectedOrder.orderNumber}</p>
@@ -465,12 +466,13 @@ const Support = () => {
                           </div>
                         )}
 
-                        <div className="flex gap-2">
+                        <div className="flex flex-col sm:flex-row gap-2">
                           <Button
                             variant="outline"
                             size="sm"
+                            className="w-full sm:w-auto"
                             onClick={() => {
-                              navigator.clipboard.writeText(selectedOrder.orderNumber);
+                              navigator.clipboard.writeText(selectedOrder.id);
                               toast.success('Order number copied!');
                             }}
                           >
@@ -480,6 +482,7 @@ const Support = () => {
                           <Button
                             variant="outline"
                             size="sm"
+                            className="w-full sm:w-auto"
                             onClick={() => setActiveTab("tickets")}
                           >
                             <MessageSquare className="h-4 w-4 mr-2" />
@@ -494,7 +497,7 @@ const Support = () => {
             </TabsContent>
 
             <TabsContent value="tickets" className="space-y-6">
-              <div className="grid lg:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
                 {/* Create New Ticket */}
                 <Card>
                   <CardHeader>
@@ -607,19 +610,19 @@ const Support = () => {
                     {tickets.length > 0 ? (
                       <div className="space-y-3">
                         {tickets.map((ticket) => (
-                          <div key={ticket.id} className="p-4 border rounded space-y-2">
-                            <div className="flex items-center justify-between">
-                              <h4 className="font-medium">{ticket.subject}</h4>
+                          <div key={ticket.id} className="p-3 sm:p-4 border rounded space-y-2">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                              <h4 className="font-medium text-sm sm:text-base truncate">{ticket.subject}</h4>
                               <Badge variant={
                                 ticket.status === 'open' ? 'destructive' :
                                 ticket.status === 'in-progress' ? 'default' :
                                 ticket.status === 'resolved' ? 'secondary' : 'outline'
-                              }>
+                              } className="self-start sm:self-center">
                                 {ticket.status}
                               </Badge>
                             </div>
-                            <p className="text-sm text-muted-foreground">{ticket.description}</p>
-                            <div className="flex items-center justify-between text-xs text-muted-foreground">
+                            <p className="text-sm text-muted-foreground line-clamp-2">{ticket.description}</p>
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-xs text-muted-foreground">
                               <span>{ticket.createdAt.toLocaleDateString()}</span>
                               <span>{ticket.messages.length} messages</span>
                             </div>
@@ -663,7 +666,7 @@ const Support = () => {
             </TabsContent>
 
             <TabsContent value="contact" className="space-y-6">
-              <div className="grid md:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
                 <Card>
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
