@@ -3,6 +3,10 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "engines": {
+    "node": ">=18.0.0 <21.0.0",
+    "npm": ">=8.0.0"
+  },
   "scripts": {
     "dev": "vite",
     "build": "vite build",
@@ -47,7 +51,6 @@
     "embla-carousel-react": "^8.6.0",
     "firebase": "^12.6.0",
     "firebase-admin": "^13.6.0",
-    "gemini": "^7.5.2",
     "input-otp": "^1.4.2",
     "lucide-react": "^0.462.0",
     "next-themes": "^0.3.0",
