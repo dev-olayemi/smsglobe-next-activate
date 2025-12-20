@@ -37,12 +37,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { TransactionHealthCheck } from "@/components/TransactionHealthCheck";
 import { format } from "date-fns";
 
 const Dashboard = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { user, profile, loading: authLoading, refreshProfile } = useAuth();
+  const { user, profile, loading: authLoading, deductFromBalance } = useAuth();
   const [loading, setLoading] = useState(true);
   const [activations, setActivations] = useState<any[]>([]);
   const [transactions, setTransactions] = useState<BalanceTransaction[]>([]);
@@ -69,10 +70,22 @@ const Dashboard = () => {
 
     try {
       const [userActivations, userTransactions, userOrders, userSmsOrders] = await Promise.all([
-        firestoreService.getUserActivations(user.uid),
-        firestoreService.getUserTransactions(user.uid),
-        firestoreApi.getOrdersByUser(user.uid),
-        firestoreService.getUserSMSOrders(user.uid),
+        firestoreService.getUserActivations(user.uid).catch(err => {
+          console.warn("Failed to load activations:", err);
+          return [];
+        }),
+        firestoreService.getUserTransactions(user.uid).catch(err => {
+          console.warn("Failed to load transactions:", err);
+          return [];
+        }),
+        firestoreApi.getOrdersByUser(user.uid).catch(err => {
+          console.warn("Failed to load orders:", err);
+          return [];
+        }),
+        firestoreService.getUserSMSOrders(user.uid).catch(err => {
+          console.warn("Failed to load SMS orders:", err);
+          return [];
+        }),
       ]);
       setActivations(userActivations);
       setTransactions(userTransactions);
@@ -107,6 +120,9 @@ const Dashboard = () => {
       setLoading(true);
       toast.info("Purchasing SMS number...");
 
+      // Deduct balance instantly in UI
+      deductFromBalance(price);
+
       let result;
       if (type === "rental") {
         // Long-term rental
@@ -117,10 +133,11 @@ const Dashboard = () => {
       }
 
       toast.success(`SMS ${type === "rental" ? "rental" : "one-time"} number purchased successfully!`);
-      refreshProfile();
       loadData();
     } catch (error: any) {
       console.error("Error purchasing SMS number:", error);
+      // Revert balance if purchase failed
+      deductFromBalance(-price);
       toast.error(error.message || "Failed to purchase SMS number");
     } finally {
       setLoading(false);
@@ -227,6 +244,10 @@ const Dashboard = () => {
       icon: tx.type === 'deposit' ? TrendingUp : ShoppingCart
     }))
   ].sort((a, b) => b.date.getTime() - a.date.getTime()).slice(0, 5);
+
+  function refreshProfile() {
+    throw new Error("Function not implemented.");
+  }
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50/50">
@@ -375,6 +396,11 @@ const Dashboard = () => {
                   </Button>
                 </CardContent>
               </Card>
+
+              {/* Transaction Health Check */}
+              <div className="mt-6">
+                <TransactionHealthCheck />
+              </div>
             </div>
 
             {/* Main Content */}
@@ -662,3 +688,7 @@ const Dashboard = () => {
 };
 
 export default Dashboard;
+function refreshProfile() {
+  throw new Error("Function not implemented.");
+}
+

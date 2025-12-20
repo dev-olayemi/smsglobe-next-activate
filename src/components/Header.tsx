@@ -2,59 +2,32 @@
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { auth } from "@/lib/auth";
+import { useAuth } from "@/lib/auth-context";
 import { useEffect, useState } from "react";
 import logo from "/favicon.png";
-import { Menu, Wallet, Home, ShoppingBag, Receipt, Shield, CreditCard, Settings, User, Crown, LogOut, DollarSign, MessageSquare, ChevronDown } from "lucide-react";
-import firestoreApi from "@/lib/firestoreApi";
+import { Menu, Wallet, Home, ShoppingBag, Receipt, Shield, CreditCard, Settings, User, Crown, LogOut, DollarSign, MessageSquare, ChevronDown, Monitor, Gift } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 
-type User = { uid: string; email?: string | null; displayName?: string | null; emailVerified?: boolean } | null;
+
 
 export const Header = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const [user, setUser] = useState<User | null>(null);
-  const [balance, setBalance] = useState<number | null>(null);
+  const { user, profile, signOut } = useAuth();
   const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
-    auth.getSession().then(({ session }) => setUser(session?.user ?? null));
-
-    const unsubscribe = auth.onAuthStateChange((session, user) => {
-      setUser(user as any);
-    });
-
-    (async () => {
-      try {
-        const s = await auth.getSession();
-        const u = s.session?.user;
-        if (u) {
-          const profile = await firestoreApi.getUserProfile(u.uid as string);
-          if (profile && typeof profile.balance === 'number') setBalance(profile.balance);
-          else if (profile && profile.balance) setBalance(Number(profile.balance));
-          if (profile && (profile.isAdmin === true || (u.email && ["muhammednetrc@gmail.com","ogunlademichael3@gmail.com"].includes(u.email)))) {
-            setIsAdmin(true);
-          }
-        }
-      } catch (e) {
-        // ignore
-      }
-    })();
-
-    return () => {
-      try {
-        if (typeof unsubscribe === "function") unsubscribe();
-      } catch (e) {
-        // ignore
-      }
-    };
-  }, []);
+    if (profile) {
+      const adminEmails = ["muhammednetrc@gmail.com", "ogunlademichael3@gmail.com"];
+      const isUserAdmin = profile.isAdmin === true || (user?.email && adminEmails.includes(user.email));
+      setIsAdmin(isUserAdmin);
+    }
+  }, [profile, user]);
 
   const handleLogout = async () => {
-    await auth.signOut();
+    await signOut();
     navigate("/");
   };
 
@@ -63,8 +36,10 @@ export const Header = () => {
   const publicNavItems = [
     { to: "/pricing", label: "Pricing" },
     { to: "/sms", label: "SMS" },
-    { to: "/vpn-and-proxy", label: "VPN & Proxy" },
+    { to: "/vpn-and-proxy", label: "Proxy" },
     { to: "/esim", label: "eSIMs" },
+    { to: "/rdp", label: "RDP" },
+    { to: "/gifts", label: "Send Gifts" },
     { to: "/how-it-works", label: "How it Works" },
     { to: "/about", label: "About" },
     { to: "/support", label: "Support" },
@@ -74,14 +49,17 @@ export const Header = () => {
     { to: "/dashboard", label: "Dashboard", icon: Home },
     { to: "/sms", label: "SMS", icon: MessageSquare },
     { to: "/orders", label: "Orders", icon: ShoppingBag },
+    { to: "/my-orders", label: "My Gift Orders", icon: Gift },
     { to: "/transactions", label: "Transactions", icon: Receipt },
-    { to: "/vpn-and-proxy", label: "VPN & Proxy", icon: Shield },
+    { to: "/vpn-and-proxy", label: "Proxy", icon: Shield },
     { to: "/esim", label: "eSIMs", icon: CreditCard },
+    { to: "/rdp", label: "RDP", icon: Monitor },
+    { to: "/gifts", label: "Send Gifts", icon: Gift },
     { to: "/profile", label: "Profile", icon: User },
     { to: "/support", label: "Support", icon: Settings },
   ];
 
-  const desktopAuthNavItems = user ? authNavItems.filter(item => !['Dashboard', 'Orders', 'Transactions', 'Profile'].includes(item.label)) : [];
+  const desktopAuthNavItems = user ? authNavItems.filter(item => !['Dashboard', 'Orders', 'My Gift Orders', 'Transactions', 'Profile'].includes(item.label)) : [];
 
   const MobileBalanceAvatar = () => (
     <div className="flex items-center gap-3">
@@ -89,7 +67,7 @@ export const Header = () => {
       <div className="flex items-center gap-1.5 bg-muted/60 px-3 py-1.5 rounded-full text-sm">
         <DollarSign className="h-4 w-4 text-primary" />
         <span className="font-bold">
-          {balance !== null ? Number(balance).toFixed(2) : "0.00"}
+          {profile?.balance !== undefined ? Number(profile.balance).toFixed(2) : "0.00"}
         </span>
         <span className="text-xs text-muted-foreground">USD</span>
       </div>
@@ -154,7 +132,7 @@ export const Header = () => {
               <div className="flex items-center gap-1 bg-muted/50 px-2 py-1 rounded-md">
                 <Wallet className="h-4 w-4 text-primary" />
                 <span className="text-sm font-bold">
-                  ${balance !== null ? Number(balance).toFixed(2) : "0.00"} USD
+                  ${profile?.balance !== undefined ? Number(profile.balance).toFixed(2) : "0.00"} USD
                 </span>
               </div>
               <DropdownMenu>
@@ -190,6 +168,9 @@ export const Header = () => {
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
                     <Link to="/orders">Orders</Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link to="/my-orders">My Gift Orders</Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
                     <Link to="/transactions">Transactions</Link>
@@ -254,7 +235,7 @@ export const Header = () => {
                       <div>
                         <p className="text-sm text-muted-foreground">Account Balance</p>
                         <p className="text-xl font-bold">
-                          ${balance !== null ? Number(balance).toFixed(2) : "0.00"} USD
+                          ${profile?.balance !== undefined ? Number(profile.balance).toFixed(2) : "0.00"} USD
                         </p>
                       </div>
                     </div>

@@ -4,8 +4,8 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { CreditCard, Bitcoin, Loader2, RefreshCw } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
+import { CreditCard, Loader2, RefreshCw, CheckCircle } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/auth-context";
 import { firestoreService } from "@/lib/firestore-service";
@@ -26,35 +26,35 @@ interface TopUpModalProps {
 
 export const TopUpModal = ({ open, onOpenChange, onSuccess }: TopUpModalProps) => {
   const navigate = useNavigate();
-  const { user, profile } = useAuth();
+  const { user, profile, addToBalance, updateBalance } = useAuth();
   const [amount, setAmount] = useState("");
-  const [paymentMethod, setPaymentMethod] = useState("flutterwave");
   const [loading, setLoading] = useState(false);
   const [exchangeRate, setExchangeRate] = useState<number>(1550);
   const [loadingRate, setLoadingRate] = useState(false);
-
-  const paymentMethods = [
-    { code: "flutterwave", name: "Card / Bank / USSD", icon: CreditCard, available: true },
-    { code: "crypto", name: "Cryptocurrency", icon: Bitcoin, available: false },
-  ];
 
   const quickAmounts = [5, 10, 25, 50, 100, 250];
 
   // Load Flutterwave script once
   useEffect(() => {
-    const script = document.createElement("script");
-    script.src = "https://checkout.flutterwave.com/v3.js";
-    script.async = true;
-    document.body.appendChild(script);
+    if (open) {
+      const script = document.createElement("script");
+      script.src = "https://checkout.flutterwave.com/v3.js";
+      script.async = true;
+      document.body.appendChild(script);
 
-    return () => {
-      document.body.removeChild(script);
-    };
-  }, []);
+      return () => {
+        if (document.body.contains(script)) {
+          document.body.removeChild(script);
+        }
+      };
+    }
+  }, [open]);
 
   // Fetch exchange rate when modal opens
   useEffect(() => {
-    if (open) fetchExchangeRate();
+    if (open) {
+      fetchExchangeRate();
+    }
   }, [open]);
 
   const fetchExchangeRate = async () => {
@@ -83,32 +83,20 @@ export const TopUpModal = ({ open, onOpenChange, onSuccess }: TopUpModalProps) =
       return;
     }
 
-    if (paymentMethod === "crypto") {
-      toast.info("Crypto payments coming soon!");
-      return;
-    }
-
     setLoading(true);
 
     try {
+      // Generate unique tx reference
       const txRef = `txn_${Date.now()}_${user.uid.slice(0, 8)}`;
 
-      const depositId = await firestoreService.createDeposit({
-        userId: user.uid,
-        amountUSD: amountNum,
-        amountNGN: ngnAmount,
-        exchangeRate,
-        status: "pending",
-        paymentMethod: "flutterwave",
-        txRef,
-      });
-
+      // Get Flutterwave public key from environment
       const publicKey = import.meta.env.VITE_PUBLIC_FLW_PUBLIC_KEY || "FLWPUBK_TEST-fd0d29a75c03d4f19df73e0d6ac9fbfa-X";
 
       if (typeof window.FlutterwaveCheckout !== "function") {
-        throw new Error("Flutterwave script not loaded yet. Try again.");
+        throw new Error("Flutterwave script not loaded yet. Please try again.");
       }
 
+      // Launch Flutterwave checkout
       window.FlutterwaveCheckout({
         public_key: publicKey,
         tx_ref: txRef,
@@ -117,8 +105,9 @@ export const TopUpModal = ({ open, onOpenChange, onSuccess }: TopUpModalProps) =
         payment_options: "card,banktransfer,ussd",
         meta: {
           userId: user.uid,
-          depositId,
           amountUSD: amountNum,
+          amountNGN: ngnAmount,
+          exchangeRate: exchangeRate
         },
         customer: {
           email: profile.email,
@@ -126,23 +115,65 @@ export const TopUpModal = ({ open, onOpenChange, onSuccess }: TopUpModalProps) =
         },
         customizations: {
           title: "SMSGlobe Top Up",
-          description: `Add ${formatCurrency(amountNum, "USD")} to your balance`,
+          description: `Add ${formatCurrency(amountNum, 'USD')} to your balance`,
+          logo: "https://smsglobe.lovable.app/favicon.png",
         },
-        callback: (data: any) => {
-          if (data?.status === "successful" || data?.status === "completed") {
-            toast.success("Payment received! Verifying and updating your balance...");
-            const params = new URLSearchParams({
-              transaction_id: String(data.transaction_id || ""),
-              tx_ref: data.tx_ref || txRef,
-              status: "completed",
-            });
-            onOpenChange(false);
-            onSuccess();
-            navigate(`/payment-callback?${params.toString()}`);
+        callback: async (data: any) => {
+          console.log("Payment response:", data);
+          
+          if (data.status === "successful" || data.status === "completed") {
+            try {
+              // Process payment directly - no server needed!
+              const transactionId = String(data.transaction_id || data.id || Date.now());
+              
+              // Update balance instantly in UI
+              addToBalance(amountNum);
+
+              // Update balance in Firestore (background)
+              try {
+                const result = await firestoreService.processPayment(
+                  user.uid,
+                  amountNum,
+                  ngnAmount,
+                  txRef,
+                  transactionId
+                );
+                // Sync with actual balance from Firestore
+                if (result.success && result.newBalance !== undefined) {
+                  updateBalance(result.newBalance);
+                }
+              } catch (error) {
+                console.error("Error updating balance in Firestore:", error);
+                // Revert balance if Firestore update fails
+                addToBalance(-amountNum);
+                toast.error("Failed to update balance. Please contact support.");
+              }
+
+              toast.success(`Successfully added ${formatCurrency(amountNum, 'USD')} to your balance!`, {
+                icon: <CheckCircle className="h-4 w-4" />,
+                duration: 5000,
+                action: {
+                  label: "View Receipt",
+                  onClick: () => navigate(`/receipt/${txRef}`)
+                }
+              });
+
+              // Close modal and trigger success callback
+              onOpenChange(false);
+              onSuccess();
+              
+              // Navigate to receipt page
+              navigate(`/receipt/${txRef}`);
+              
+            } catch (error) {
+              console.error("Error processing payment:", error);
+              toast.error("Payment successful but failed to update balance. Please contact support.");
+            }
           } else {
-            toast.error("Payment failed or incomplete.");
-            setLoading(false);
+            toast.error("Payment failed or was not completed.");
           }
+          
+          setLoading(false);
         },
         onclose: () => {
           toast.info("Payment cancelled.");
@@ -160,9 +191,12 @@ export const TopUpModal = ({ open, onOpenChange, onSuccess }: TopUpModalProps) =
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Top Up Balance</DialogTitle>
+          <DialogTitle className="flex items-center gap-2">
+            <CreditCard className="h-5 w-5" />
+            Top Up Balance
+          </DialogTitle>
           <DialogDescription>
-            Add funds to your SMSGlobe account
+            Add funds to your SMSGlobe account instantly
           </DialogDescription>
         </DialogHeader>
 
@@ -205,65 +239,34 @@ export const TopUpModal = ({ open, onOpenChange, onSuccess }: TopUpModalProps) =
 
           {/* Exchange Rate & NGN Amount Display */}
           {amountNum > 0 && (
-            <div className="p-4 rounded-lg bg-muted/50 border space-y-2">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Exchange Rate</span>
-                <div className="flex items-center gap-2">
-                  <span className="font-medium">1 USD = {formatCurrency(exchangeRate, 'NGN')}</span>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-6 w-6"
-                    onClick={fetchExchangeRate}
-                    disabled={loadingRate}
-                  >
-                    <RefreshCw className={`h-3 w-3 ${loadingRate ? 'animate-spin' : ''}`} />
-                  </Button>
+            <Card className="bg-muted/50">
+              <CardContent className="p-4 space-y-2">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">Exchange Rate</span>
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium">1 USD = {formatCurrency(exchangeRate, 'NGN')}</span>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6"
+                      onClick={fetchExchangeRate}
+                      disabled={loadingRate}
+                    >
+                      <RefreshCw className={`h-3 w-3 ${loadingRate ? 'animate-spin' : ''}`} />
+                    </Button>
+                  </div>
                 </div>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">You will pay</span>
-                <span className="text-lg font-bold text-primary">{formatCurrency(ngnAmount, 'NGN')}</span>
-              </div>
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Balance will receive</span>
-                <span className="font-medium text-success">{formatCurrency(amountNum, 'USD')}</span>
-              </div>
-            </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">You will pay</span>
+                  <span className="text-lg font-bold text-primary">{formatCurrency(ngnAmount, 'NGN')}</span>
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">Balance will receive</span>
+                  <span className="font-medium text-success">{formatCurrency(amountNum, 'USD')}</span>
+                </div>
+              </CardContent>
+            </Card>
           )}
-
-          {/* Payment Method Selection */}
-          <div className="space-y-2">
-            <Label>Payment Method</Label>
-            <RadioGroup value={paymentMethod} onValueChange={setPaymentMethod}>
-              {paymentMethods.map((method) => (
-                <div 
-                  key={method.code} 
-                  className={`flex items-center space-x-2 rounded-lg border p-3 transition-colors ${
-                    method.available 
-                      ? 'hover:bg-muted/50 cursor-pointer' 
-                      : 'opacity-50 cursor-not-allowed'
-                  }`}
-                >
-                  <RadioGroupItem 
-                    value={method.code} 
-                    id={method.code} 
-                    disabled={!method.available}
-                  />
-                  <Label
-                    htmlFor={method.code}
-                    className={`flex items-center gap-2 flex-1 ${method.available ? 'cursor-pointer' : 'cursor-not-allowed'}`}
-                  >
-                    <method.icon className="h-4 w-4" />
-                    <span>{method.name}</span>
-                    {!method.available && (
-                      <span className="text-xs text-muted-foreground ml-auto">Coming Soon</span>
-                    )}
-                  </Label>
-                </div>
-              ))}
-            </RadioGroup>
-          </div>
 
           {/* Submit Button */}
           <Button
@@ -283,7 +286,7 @@ export const TopUpModal = ({ open, onOpenChange, onSuccess }: TopUpModalProps) =
           </Button>
 
           <p className="text-xs text-center text-muted-foreground">
-            Balance will be credited as ${amountNum.toFixed(2)} USD after payment confirmation
+            Secure payment powered by Flutterwave. Funds credited immediately after confirmation.
           </p>
         </div>
       </DialogContent>

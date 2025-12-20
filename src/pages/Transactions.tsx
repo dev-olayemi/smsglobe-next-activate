@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/lib/auth-context";
-import { firestoreService, BalanceTransaction, Deposit } from "@/lib/firestore-service";
+import { firestoreService, BalanceTransaction } from "@/lib/firestore-service";
 import { formatCurrency } from "@/lib/currency";
 import { 
   Loader2, 
@@ -28,7 +28,7 @@ const Transactions = () => {
   const { user, loading: authLoading } = useAuth();
   const [loading, setLoading] = useState(true);
   const [transactions, setTransactions] = useState<BalanceTransaction[]>([]);
-  const [deposits, setDeposits] = useState<Deposit[]>([]);
+
   const [activeTab, setActiveTab] = useState("all");
 
   useEffect(() => {
@@ -45,12 +45,11 @@ const Transactions = () => {
     if (!user) return;
     
     try {
-      const [txData, depositData] = await Promise.all([
-        firestoreService.getUserTransactions(user.uid),
-        firestoreService.getUserDeposits(user.uid),
-      ]);
+      const txData = await firestoreService.getUserTransactions(user.uid).catch(err => {
+        console.warn("Failed to load transactions:", err);
+        return [];
+      });
       setTransactions(txData);
-      setDeposits(depositData);
     } catch (error) {
       console.error("Error loading data:", error);
     } finally {
@@ -84,31 +83,7 @@ const Transactions = () => {
     return type === 'deposit' || type === 'referral_bonus' || type === 'refund';
   };
 
-  const getDepositStatusIcon = (status: string) => {
-    switch (status) {
-      case 'completed':
-        return <CheckCircle className="h-4 w-4 text-success" />;
-      case 'pending':
-        return <Clock className="h-4 w-4 text-warning" />;
-      case 'failed':
-        return <XCircle className="h-4 w-4 text-destructive" />;
-      default:
-        return <Clock className="h-4 w-4" />;
-    }
-  };
 
-  const getDepositStatusColor = (status: string) => {
-    switch (status) {
-      case 'completed':
-        return 'bg-success/10 text-success';
-      case 'pending':
-        return 'bg-warning/10 text-warning';
-      case 'failed':
-        return 'bg-destructive/10 text-destructive';
-      default:
-        return 'bg-muted text-muted-foreground';
-    }
-  };
 
   if (authLoading || loading) {
     return (
@@ -193,7 +168,7 @@ const Transactions = () => {
           <Tabs defaultValue="all" value={activeTab} onValueChange={setActiveTab}>
             <TabsList className="grid w-full max-w-md grid-cols-3">
               <TabsTrigger value="all" className="text-xs sm:text-sm">All ({transactions.length})</TabsTrigger>
-              <TabsTrigger value="deposits" className="text-xs sm:text-sm">Deposits ({deposits.length})</TabsTrigger>
+              <TabsTrigger value="deposits" className="text-xs sm:text-sm">Deposits ({transactions.filter(t => t.type === 'deposit').length})</TabsTrigger>
               <TabsTrigger value="purchases" className="text-xs sm:text-sm">Purchases</TabsTrigger>
             </TabsList>
 
@@ -268,7 +243,7 @@ const Transactions = () => {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  {deposits.length === 0 ? (
+                  {transactions.filter(t => t.type === 'deposit').length === 0 ? (
                     <div className="text-center py-12 text-muted-foreground">
                       <Wallet className="h-12 w-12 mx-auto mb-4 opacity-50" />
                       <p className="font-medium">No deposits yet</p>
@@ -276,41 +251,40 @@ const Transactions = () => {
                     </div>
                   ) : (
                     <div className="space-y-2 md:space-y-3">
-                      {deposits.map((deposit) => (
+                      {transactions.filter(t => t.type === 'deposit').map((transaction) => (
                         <div
-                          key={deposit.id}
+                          key={transaction.id}
                           className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 p-3 md:p-4 rounded-lg border bg-card"
                         >
                           <div className="flex items-center gap-3 md:gap-4 flex-1">
-                            <div className={`p-2 rounded-full shrink-0 ${getDepositStatusColor(deposit.status)}`}>
-                              {getDepositStatusIcon(deposit.status)}
+                            <div className={`p-2 rounded-full shrink-0 ${getTransactionColor(transaction.type)}`}>
+                              {getTransactionIcon(transaction.type)}
                             </div>
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2">
                                 <p className="font-medium text-sm md:text-base">
-                                  {deposit.paymentMethod === 'flutterwave' ? 'Flutterwave' : 'Crypto'} Deposit
+                                  {transaction.description}
                                 </p>
-                                <span className={`text-xs px-2 py-0.5 rounded-full capitalize ${getDepositStatusColor(deposit.status)}`}>
-                                  {deposit.status}
-                                </span>
                               </div>
                               <p className="text-xs md:text-sm text-muted-foreground">
-                                {deposit.createdAt?.toDate 
-                                  ? format(deposit.createdAt.toDate(), "MMM dd, yyyy 'at' h:mm a")
+                                {transaction.createdAt?.toDate 
+                                  ? format(transaction.createdAt.toDate(), "MMM dd, yyyy 'at' h:mm a")
                                   : 'Date unavailable'
                                 }
                               </p>
-                              <p className="text-xs text-muted-foreground truncate">
-                                Ref: {deposit.txRef}
-                              </p>
+                              {transaction.txRef && (
+                                <p className="text-xs text-muted-foreground truncate">
+                                  Ref: {transaction.txRef}
+                                </p>
+                              )}
                             </div>
                           </div>
                           <div className="text-left sm:text-right shrink-0">
                             <p className="font-bold text-base md:text-lg text-success">
-                              +{formatCurrency(deposit.amountUSD, 'USD')}
+                              +{formatCurrency(transaction.amount, 'USD')}
                             </p>
                             <p className="text-xs text-muted-foreground">
-                              Paid: {formatCurrency(deposit.amountNGN, 'NGN')}
+                              Balance: {formatCurrency(transaction.balanceAfter, 'USD')}
                             </p>
                           </div>
                         </div>

@@ -15,6 +15,7 @@ import {
   Timestamp
 } from "firebase/firestore";
 import { db } from "./firebase";
+import { validatePurchaseRequest, validateTransaction, validateProductOrder, cleanFirestoreData } from "./transaction-validator";
 
 // User Profile
 export interface UserProfile {
@@ -52,6 +53,8 @@ export interface BalanceTransaction {
   amount: number;
   description: string;
   balanceAfter: number;
+  txRef?: string;
+  transactionId?: string;
   createdAt?: Timestamp | any;
 }
 
@@ -68,21 +71,6 @@ export interface Activation {
   externalId?: string;
   createdAt?: Timestamp | any;
   updatedAt?: Timestamp | any;
-}
-
-// Deposit
-export interface Deposit {
-  id: string;
-  userId: string;
-  amountUSD: number;
-  amountNGN: number;
-  exchangeRate: number;
-  status: 'pending' | 'completed' | 'failed';
-  paymentMethod: 'flutterwave' | 'crypto';
-  txRef: string;
-  transactionId?: string;
-  createdAt?: Timestamp | any;
-  completedAt?: Timestamp | any;
 }
 
 // Product Category Types
@@ -112,6 +100,10 @@ export interface ProductListing {
 
 // Product Order
 export interface ProductOrder {
+  amount: any;
+  orderNumber: ReactNode;
+  amount: any;
+  deliveryInfo: any;
   id: string;
   userId: string;
   userEmail: string;
@@ -121,11 +113,31 @@ export interface ProductOrder {
   category: ProductCategory;
   price: number;
   status: 'pending' | 'processing' | 'completed' | 'cancelled' | 'refunded';
+  
+  // Customer request details
+  requestDetails?: {
+    location?: string;
+    duration?: string;
+    specifications?: string;
+    additionalNotes?: string;
+  };
+  
+  // Admin response
   deliveryDetails?: string; // Admin fills this with VPN credentials, eSIM details, etc.
   adminNotes?: string;
+  adminResponse?: {
+    credentials?: string;
+    instructions?: string;
+    downloadLinks?: string[];
+    expiryDate?: string;
+    supportContact?: string;
+  };
+  
+  // Timestamps
   createdAt?: Timestamp | any;
   updatedAt?: Timestamp | any;
   completedAt?: Timestamp | any;
+  processedAt?: Timestamp | any;
 }
 
 // SMS Order Types
@@ -281,10 +293,20 @@ export const firestoreService = {
   // ===== BALANCE TRANSACTIONS =====
   async addBalanceTransaction(transaction: Omit<BalanceTransaction, 'id' | 'createdAt'>) {
     const colRef = collection(db, "balance_transactions");
-    const docRef = await addDoc(colRef, {
-      ...transaction,
+    
+    // Clean transaction data to remove undefined values
+    const cleanTransaction = {
+      userId: transaction.userId,
+      type: transaction.type,
+      amount: transaction.amount,
+      description: transaction.description,
+      balanceAfter: transaction.balanceAfter,
+      txRef: transaction.txRef || null,
+      transactionId: transaction.transactionId || null,
       createdAt: serverTimestamp()
-    });
+    };
+    
+    const docRef = await addDoc(colRef, cleanTransaction);
     return docRef.id;
   },
 
@@ -297,6 +319,35 @@ export const firestoreService = {
     );
     const snapshot = await getDocs(q);
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as BalanceTransaction));
+  },
+
+  // ===== SIMPLE PAYMENT PROCESSING =====
+  async processPayment(userId: string, amountUSD: number, amountNGN: number, txRef: string, transactionId: string) {
+    const profile = await this.getUserProfile(userId);
+    if (!profile) throw new Error('User profile not found');
+
+    const newBalance = (profile.balance || 0) + amountUSD;
+
+    try {
+      // Update user balance
+      await this.updateUserBalance(userId, newBalance);
+
+      // Add transaction record
+      await this.addBalanceTransaction({
+        userId,
+        type: 'deposit',
+        amount: amountUSD,
+        description: `Top up via Flutterwave - ₦${amountNGN.toLocaleString()}`,
+        balanceAfter: newBalance,
+        txRef,
+        transactionId
+      });
+
+      return { success: true, newBalance };
+    } catch (err) {
+      console.error('Error processing payment:', err);
+      throw err;
+    }
   },
 
   // ===== ACTIVATIONS/ORDERS =====
@@ -327,259 +378,6 @@ export const firestoreService = {
       ...data,
       updatedAt: serverTimestamp()
     });
-  },
-
-  // ===== DEPOSITS =====
-  async createDeposit(deposit: Omit<Deposit, 'id' | 'createdAt'>) {
-    const colRef = collection(db, "deposits");
-    try {
-      const docRef = await addDoc(colRef, {
-        ...deposit,
-        // For compatibility with Firestore rules expecting `amount`
-        amount: Number((deposit as any).amountNGN ?? 0),
-        createdAt: serverTimestamp()
-      });
-      return docRef.id;
-    } catch (err) {
-      // Fallback for local development when Firestore is not writable or
-      // permissions are insufficient. Persist a mock deposit in localStorage.
-      try {
-        if (typeof window !== 'undefined') {
-          const key = 'smsglobe_mock_deposits';
-          const existing = JSON.parse(localStorage.getItem(key) || '[]');
-          const id = `mock_${Date.now()}`;
-          const mock = { id, ...deposit, createdAt: new Date().toISOString() };
-          existing.push(mock);
-          localStorage.setItem(key, JSON.stringify(existing));
-          return id;
-        }
-      } catch (e) {
-        console.error('Local deposit fallback failed:', e);
-      }
-      throw err;
-    }
-  },
-
-  async getUserDeposits(userId: string): Promise<Deposit[]> {
-    const colRef = collection(db, "deposits");
-    const q = query(
-      colRef,
-      where("userId", "==", userId),
-      orderBy("createdAt", "desc")
-    );
-    const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Deposit));
-  },
-
-  async getDepositByTxRef(txRef: string): Promise<Deposit | null> {
-    const colRef = collection(db, "deposits");
-    try {
-      const q = query(colRef, where("txRef", "==", txRef));
-      const snapshot = await getDocs(q);
-
-      if (!snapshot.empty) {
-        const docSnap = snapshot.docs[0];
-        return { id: docSnap.id, ...docSnap.data() } as Deposit;
-      }
-      // Not found in Firestore — fall through to check local mocks
-    } catch (err) {
-      console.error('Error reading deposit from Firestore:', err);
-      // Continue to localStorage fallback
-    }
-
-    // LocalStorage fallback
-    try {
-      if (typeof window !== 'undefined') {
-        const key = 'smsglobe_mock_deposits';
-        const arr = JSON.parse(localStorage.getItem(key) || '[]');
-        const found = arr.find((d: any) => d.txRef === txRef);
-        return found ? (found as Deposit) : null;
-      }
-    } catch (e) {
-      console.error('Local deposit lookup failed:', e);
-    }
-
-    return null;
-  },
-
-  // ===== PAYMENT RECORDS (separate collection to track gateway payments) =====
-  async addPaymentRecord(record: {
-    userId: string;
-    txRef: string;
-    transactionId?: string;
-    amountUSD?: number;
-    amountNGN?: number;
-    exchangeRate?: number;
-    paymentMethod?: string;
-    providerRef?: string;
-    status?: string;
-  }) {
-    const colRef = collection(db, 'payments');
-    try {
-      const docRef = await addDoc(colRef, { ...record, createdAt: serverTimestamp() });
-      return docRef.id;
-    } catch (err) {
-      console.error('Error adding payment record to Firestore, falling back to localStorage:', err);
-      try {
-        if (typeof window !== 'undefined') {
-          const key = 'smsglobe_mock_payments';
-          const arr = JSON.parse(localStorage.getItem(key) || '[]');
-          const id = `mock_pay_${Date.now()}`;
-          const mock = { id, ...record, createdAt: new Date().toISOString() };
-          arr.push(mock);
-          localStorage.setItem(key, JSON.stringify(arr));
-          return id;
-        }
-      } catch (e) {
-        console.error('Local payment fallback failed:', e);
-      }
-      throw err;
-    }
-  },
-
-  async getPaymentByTxRef(txRef: string) {
-    const colRef = collection(db, 'payments');
-    try {
-      const q = query(colRef, where('txRef', '==', txRef));
-      const snap = await getDocs(q);
-      if (!snap.empty) {
-        const docSnap = snap.docs[0];
-        return { id: docSnap.id, ...docSnap.data() } as any;
-      }
-    } catch (err) {
-      console.error('Error reading payment from Firestore:', err);
-    }
-
-    try {
-      if (typeof window !== 'undefined') {
-        const key = 'smsglobe_mock_payments';
-        const arr = JSON.parse(localStorage.getItem(key) || '[]');
-        return arr.find((p: any) => p.txRef === txRef) || null;
-      }
-    } catch (e) {
-      console.error('Local payment lookup failed:', e);
-    }
-
-    return null;
-  },
-
-  async completePayment(paymentId: string, userId: string, amountUSD: number, transactionId: string) {
-    // Mirror completeDeposit but operate on payments collection
-    const colRef = collection(db, 'payments');
-    try {
-      const docRef = doc(db, 'payments', paymentId);
-      await updateDoc(docRef, { status: 'completed', transactionId, completedAt: serverTimestamp() });
-
-      // Update balance and add transaction
-      const newBalance = (await this.getUserProfile(userId))?.balance || 0 + amountUSD;
-      await this.updateUserBalance(userId, newBalance);
-      await this.addBalanceTransaction({ userId, type: 'deposit', amount: amountUSD, description: `Deposit via Flutterwave`, balanceAfter: newBalance });
-      return newBalance;
-    } catch (err) {
-      console.error('Error completing payment in Firestore, falling back to localStorage:', err);
-      try {
-        if (typeof window !== 'undefined') {
-          const key = 'smsglobe_mock_payments';
-          const arr = JSON.parse(localStorage.getItem(key) || '[]');
-          const idx = arr.findIndex((p: any) => p.id === paymentId || p.txRef === paymentId);
-          if (idx >= 0) {
-            arr[idx].status = 'completed';
-            arr[idx].transactionId = transactionId;
-            arr[idx].completedAt = new Date().toISOString();
-            localStorage.setItem(key, JSON.stringify(arr));
-          }
-
-          const profKey = 'smsglobe_mock_profiles';
-          const profiles = JSON.parse(localStorage.getItem(profKey) || '{}');
-          const existing = profiles[userId] || { balance: 0 };
-          const newProf = { ...existing, balance: (existing.balance || 0) + amountUSD };
-          profiles[userId] = newProf;
-          localStorage.setItem(profKey, JSON.stringify(profiles));
-
-          const txKey = 'smsglobe_mock_transactions';
-          const txs = JSON.parse(localStorage.getItem(txKey) || '[]');
-          txs.push({ id: `mock_tx_${Date.now()}`, userId, type: 'deposit', amount: amountUSD, description: 'Deposit via Flutterwave', balanceAfter: newProf.balance, createdAt: new Date().toISOString() });
-          localStorage.setItem(txKey, JSON.stringify(txs));
-
-          return newProf.balance;
-        }
-      } catch (fallbackErr) {
-        console.error('Local fallback in completePayment failed:', fallbackErr);
-      }
-
-      throw err;
-    }
-  },
-
-  async updateDeposit(depositId: string, data: Partial<Deposit>) {
-    const docRef = doc(db, "deposits", depositId);
-    await updateDoc(docRef, data);
-  },
-
-  // ===== COMPLETE DEPOSIT (after payment verification) =====
-  async completeDeposit(depositId: string, userId: string, amountUSD: number, transactionId: string) {
-    const profile = await this.getUserProfile(userId);
-    if (!profile) throw new Error('User profile not found');
-
-    const newBalance = (profile.balance || 0) + amountUSD;
-
-    try {
-      await this.updateDeposit(depositId, {
-        status: 'completed',
-        transactionId,
-        completedAt: serverTimestamp() as Timestamp
-      });
-
-      await this.updateUserBalance(userId, newBalance);
-
-      await this.addBalanceTransaction({
-        userId,
-        type: 'deposit',
-        amount: amountUSD,
-        description: `Deposit via Flutterwave`,
-        balanceAfter: newBalance
-      });
-
-      return newBalance;
-    } catch (err) {
-      // Fallback for local development when Firestore writes fail due to
-      // permissions or emulator not running. Update mock data in localStorage
-      // so the UI can reflect immediate changes.
-      console.error('Firestore write failed in completeDeposit, falling back to localStorage:', err);
-      try {
-        if (typeof window !== 'undefined') {
-          const depKey = 'smsglobe_mock_deposits';
-          const deps = JSON.parse(localStorage.getItem(depKey) || '[]');
-          const idx = deps.findIndex((d: any) => d.id === depositId || d.txRef === depositId);
-          if (idx >= 0) {
-            deps[idx].status = 'completed';
-            deps[idx].transactionId = transactionId;
-            deps[idx].completedAt = new Date().toISOString();
-            localStorage.setItem(depKey, JSON.stringify(deps));
-          }
-
-          // Update mock profile
-          const profKey = 'smsglobe_mock_profiles';
-          const profiles = JSON.parse(localStorage.getItem(profKey) || '{}');
-          const existing = profiles[userId] || { balance: 0 };
-          const newProf = { ...existing, balance: (existing.balance || 0) + amountUSD };
-          profiles[userId] = newProf;
-          localStorage.setItem(profKey, JSON.stringify(profiles));
-
-          // Add mock transaction
-          const txKey = 'smsglobe_mock_transactions';
-          const txs = JSON.parse(localStorage.getItem(txKey) || '[]');
-          txs.push({ id: `mock_tx_${Date.now()}`, userId, type: 'deposit', amount: amountUSD, description: 'Deposit via Flutterwave', balanceAfter: newProf.balance, createdAt: new Date().toISOString() });
-          localStorage.setItem(txKey, JSON.stringify(txs));
-
-          return newProf.balance;
-        }
-      } catch (fallbackErr) {
-        console.error('Local fallback in completeDeposit failed:', fallbackErr);
-      }
-
-      throw err;
-    }
   },
 
   // ===== REFERRALS =====
@@ -731,11 +529,41 @@ export const firestoreService = {
   // ===== PRODUCT ORDERS =====
   async createProductOrder(order: Omit<ProductOrder, 'id' | 'createdAt' | 'updatedAt'>) {
     const colRef = collection(db, "product_orders");
-    const docRef = await addDoc(colRef, {
-      ...order,
+    
+    // Clean the order data to remove undefined values
+    const cleanOrder: any = {
+      userId: order.userId,
+      userEmail: order.userEmail || '',
+      productId: order.productId,
+      productName: order.productName,
+      category: order.category,
+      price: order.price,
+      status: order.status,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp()
-    });
+    };
+
+    // Only add optional fields if they have values (avoid undefined)
+    if (order.username) cleanOrder.username = order.username;
+    if (order.deliveryDetails) cleanOrder.deliveryDetails = order.deliveryDetails;
+    if (order.adminNotes) cleanOrder.adminNotes = order.adminNotes;
+    if (order.adminResponse) cleanOrder.adminResponse = order.adminResponse;
+    
+    // Clean requestDetails object to remove undefined values
+    if (order.requestDetails) {
+      const cleanRequestDetails: any = {};
+      if (order.requestDetails.location) cleanRequestDetails.location = order.requestDetails.location;
+      if (order.requestDetails.duration) cleanRequestDetails.duration = order.requestDetails.duration;
+      if (order.requestDetails.specifications) cleanRequestDetails.specifications = order.requestDetails.specifications;
+      if (order.requestDetails.additionalNotes) cleanRequestDetails.additionalNotes = order.requestDetails.additionalNotes;
+      
+      // Only add requestDetails if it has at least one property
+      if (Object.keys(cleanRequestDetails).length > 0) {
+        cleanOrder.requestDetails = cleanRequestDetails;
+      }
+    }
+    
+    const docRef = await addDoc(colRef, cleanOrder);
     return docRef.id;
   },
 
@@ -835,7 +663,17 @@ export const firestoreService = {
   },
 
   // ===== PURCHASE PRODUCT =====
-  async purchaseProduct(userId: string, productId: string): Promise<{ success: boolean; orderId?: string; error?: string }> {
+  async purchaseProduct(
+    userId: string, 
+    productId: string, 
+    requestDetails?: {
+      location?: string;
+      duration?: string;
+      specifications?: string;
+      additionalNotes?: string;
+    }
+  ): Promise<{ success: boolean; orderId?: string; error?: string }> {
+    // Pre-flight checks (no database writes yet)
     const profile = await this.getUserProfile(userId);
     if (!profile) return { success: false, error: "User not found" };
     
@@ -843,50 +681,219 @@ export const firestoreService = {
     if (!product) return { success: false, error: "Product not found" };
     if (!product.isActive) return { success: false, error: "Product is not available" };
     
-    if (profile.balance < product.price) {
-      return { success: false, error: "Insufficient balance" };
+    // Validate purchase request
+    const validation = validatePurchaseRequest(userId, productId, profile.balance, product.price, requestDetails);
+    if (!validation.isValid) {
+      console.error('❌ Purchase validation failed:', validation.errors);
+      return { success: false, error: validation.errors.join('; ') };
+    }
+    
+    // Log warnings if any
+    if (validation.warnings.length > 0) {
+      console.warn('⚠️ Purchase warnings:', validation.warnings);
     }
     
     const newBalance = profile.balance - product.price;
+    let orderId: string | null = null;
     
-    // Create order
-    const orderId = await this.createProductOrder({
-      userId,
-      userEmail: profile.email,
-      username: profile.username,
-      productId,
-      productName: product.name,
-      category: product.category,
-      price: product.price,
-      status: 'pending'
-    });
-    
-    // Deduct balance
-    await this.updateUserBalance(userId, newBalance);
-    
-    // Update user_balances collection
-    const balanceRef = doc(db, "user_balances", userId);
-    const balanceSnap = await getDoc(balanceRef);
-    if (balanceSnap.exists()) {
-      const balanceData = balanceSnap.data();
-      await updateDoc(balanceRef, {
-        balanceUSD: newBalance,
-        totalSpentUSD: Number(balanceData.totalSpentUSD || 0) + product.price,
-        totalTransactionsCount: Number(balanceData.totalTransactionsCount || 0) + 1,
-        lastTransactionAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
+    try {
+      // Clean request details to ensure Firestore compatibility
+      const cleanRequestDetails = requestDetails ? cleanFirestoreData(requestDetails) : undefined;
+      
+      // Step 1: Create order first (this is the main operation)
+      orderId = await this.createProductOrder({
+        userId,
+        userEmail: profile.email,
+        username: profile.username,
+        productId,
+        productName: product.name,
+        category: product.category,
+        price: product.price,
+        status: 'pending',
+        requestDetails: cleanRequestDetails
       });
+      
+      console.log(`✅ Order created: ${orderId}`);
+      
+      // Step 2: Deduct balance (critical - must succeed)
+      await this.updateUserBalance(userId, newBalance);
+      console.log(`✅ Balance updated: ${profile.balance} → ${newBalance}`);
+      
+      // Step 3: Record transaction (critical - must succeed)
+      const transactionData = {
+        userId,
+        type: 'purchase' as const,
+        amount: -product.price,
+        description: `Purchase: ${product.name}`,
+        balanceAfter: newBalance
+      };
+      
+      // Validate transaction before recording
+      const txValidation = validateTransaction(
+        transactionData.userId,
+        transactionData.type,
+        transactionData.amount,
+        transactionData.description,
+        transactionData.balanceAfter
+      );
+      
+      if (!txValidation.isValid) {
+        throw new Error(`Transaction validation failed: ${txValidation.errors.join('; ')}`);
+      }
+      
+      await this.addBalanceTransaction(transactionData);
+      console.log(`✅ Transaction recorded: -$${product.price}`);
+      
+      // Step 4: Update user_balances collection (optional - can fail)
+      try {
+        const balanceRef = doc(db, "user_balances", userId);
+        const balanceSnap = await getDoc(balanceRef);
+        if (balanceSnap.exists()) {
+          const balanceData = balanceSnap.data();
+          await updateDoc(balanceRef, {
+            balanceUSD: newBalance,
+            totalSpentUSD: Number(balanceData.totalSpentUSD || 0) + product.price,
+            totalTransactionsCount: Number(balanceData.totalTransactionsCount || 0) + 1,
+            lastTransactionAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          });
+          console.log(`✅ User balances collection updated`);
+        }
+      } catch (balanceError) {
+        console.warn(`⚠️ Failed to update user_balances collection (non-critical):`, balanceError);
+        // Don't fail the entire transaction for this
+      }
+      
+      return { success: true, orderId };
+      
+    } catch (error) {
+      console.error(`❌ Purchase failed:`, error);
+      
+      // ROLLBACK: If we created an order but failed later, delete it
+      if (orderId) {
+        try {
+          console.log(`🔄 Rolling back order: ${orderId}`);
+          await this.deleteProductOrder(orderId);
+          console.log(`✅ Order rollback successful`);
+        } catch (rollbackError) {
+          console.error(`❌ Failed to rollback order ${orderId}:`, rollbackError);
+          // Log this for manual cleanup
+        }
+      }
+      
+      // Return detailed error message
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      return { 
+        success: false, 
+        error: `Purchase failed: ${errorMessage}. Please try again or contact support if the issue persists.` 
+      };
     }
-    
-    // Record transaction
-    await this.addBalanceTransaction({
-      userId,
-      type: 'purchase',
-      amount: -product.price,
-      description: `Purchase: ${product.name}`,
-      balanceAfter: newBalance
-    });
-    
-    return { success: true, orderId };
+  },
+
+  // Helper function to delete a product order (for rollback)
+  async deleteProductOrder(orderId: string) {
+    const docRef = doc(db, "product_orders", orderId);
+    await deleteDoc(docRef);
+  },
+
+  // ===== GIFT DELIVERY INTEGRATION =====
+  
+  /**
+   * Process gift purchase with address and delivery details
+   * This integrates with the gift delivery system
+   */
+  async purchaseGift(
+    userId: string,
+    giftId: string,
+    addressId: string,
+    orderDetails: {
+      quantity: number;
+      senderMessage?: string;
+      showSenderName: boolean;
+      deliveryInstructions?: string;
+      preferredDeliveryTime: 'morning' | 'afternoon' | 'evening' | 'anytime';
+      targetDeliveryDate: string;
+    }
+  ): Promise<{ success: boolean; orderId?: string; orderNumber?: string; trackingCode?: string; error?: string }> {
+    try {
+      // Import gift service dynamically to avoid circular dependencies
+      const { giftService } = await import('./gift-service');
+      
+      // Use the gift service to process the purchase
+      const result = await giftService.processGiftPurchase(
+        userId,
+        giftId,
+        addressId,
+        orderDetails
+      );
+
+      if (result.success) {
+        // Deduct balance from user account
+        const profile = await this.getUserProfile(userId);
+        if (!profile) {
+          return { success: false, error: "User profile not found" };
+        }
+
+        // Get gift details for pricing
+        const gift = await giftService.getGiftById(giftId);
+        if (!gift) {
+          return { success: false, error: "Gift not found" };
+        }
+
+        // Calculate total amount (gift price + shipping)
+        const { shippingService } = await import('./shipping-service');
+        const { addressService } = await import('./address-service');
+        
+        const addresses = await addressService.getUserAddresses(userId);
+        const address = addresses.find(addr => addr.id === addressId);
+        
+        if (!address) {
+          return { success: false, error: "Delivery address not found" };
+        }
+
+        const shippingCalculation = await shippingService.calculateShippingFee(
+          {
+            id: gift.id,
+            title: gift.title,
+            weight: gift.weight,
+            sizeClass: gift.sizeClass,
+            isFragile: gift.isFragile
+          },
+          {
+            countryCode: address.countryCode,
+            countryName: address.countryName,
+            state: address.state,
+            city: address.city,
+            latitude: address.latitude,
+            longitude: address.longitude
+          }
+        );
+
+        const totalAmount = (gift.basePrice * orderDetails.quantity) + shippingCalculation.totalFee;
+        const newBalance = profile.balance - totalAmount;
+
+        // Update balance
+        await this.updateUserBalance(userId, newBalance);
+
+        // Record transaction
+        await this.addBalanceTransaction({
+          userId,
+          type: 'purchase',
+          amount: -totalAmount,
+          description: `Gift Purchase: ${gift.title} (${orderDetails.quantity}x) + Shipping`,
+          balanceAfter: newBalance
+        });
+
+        console.log(`✅ Gift purchase completed: ${result.orderNumber}`);
+      }
+
+      return result;
+    } catch (error) {
+      console.error('Error processing gift purchase:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to process gift purchase'
+      };
+    }
   }
 };

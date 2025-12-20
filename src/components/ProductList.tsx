@@ -112,7 +112,7 @@ export const ProductList: React.FC = () => {
                   )}
                   <div className="flex items-center justify-between">
                     <div className="font-bold text-xl text-primary">
-                      ₦{Number(p.price).toLocaleString()}
+                      ${Number(p.price).toFixed(2)}
                     </div>
                     {p.outOfStock ? (
                       <div className="text-xs bg-red-100 text-red-700 px-2 py-1 rounded">Out of stock</div>

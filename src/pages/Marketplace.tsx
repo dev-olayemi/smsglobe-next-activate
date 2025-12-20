@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/lib/auth-context";
 import { firestoreService, ProductListing, ProductCategory } from "@/lib/firestore-service";
+import { PurchaseRequestModal } from "@/components/PurchaseRequestModal";
 import { toast } from "sonner";
 import { Loader2, Wifi, Globe, Shield, Monitor, Gift, ShoppingCart, Clock, Check } from "lucide-react";
 
@@ -28,13 +29,14 @@ const categoryLabels: Record<ProductCategory, string> = {
 
 const Marketplace = () => {
   const navigate = useNavigate();
-  const { user, profile, refreshProfile } = useAuth();
+  const { user, profile, deductFromBalance } = useAuth();
   const [products, setProducts] = useState<ProductListing[]>([]);
   const [loading, setLoading] = useState(true);
   const [purchasing, setPurchasing] = useState<string | null>(null);
+  const [selectedProduct, setSelectedProduct] = useState<ProductListing | null>(null);
+  const [showPurchaseModal, setShowPurchaseModal] = useState(false);
 
-  // Exchange rate: 1 USD = 1500 NGN (approximate)
-  const USD_TO_NGN = 1500;
+
 
   useEffect(() => {
     loadProducts();
@@ -61,7 +63,7 @@ const Marketplace = () => {
     return acc;
   }, {} as Record<ProductCategory, ProductListing[]>);
 
-  const handlePurchase = async (product: ProductListing) => {
+  const handlePurchase = (product: ProductListing) => {
     if (!user) {
       toast.error("Please login to purchase");
       navigate("/login");
@@ -73,22 +75,12 @@ const Marketplace = () => {
       return;
     }
 
-    setPurchasing(product.id);
-    try {
-      const result = await firestoreService.purchaseProduct(user.uid, product.id);
-      if (result.success) {
-        toast.success("Order placed successfully! Check your orders for updates.");
-        await refreshProfile();
-        navigate("/orders");
-      } else {
-        toast.error(result.error || "Failed to place order");
-      }
-    } catch (error) {
-      console.error("Purchase error:", error);
-      toast.error("Failed to complete purchase");
-    } finally {
-      setPurchasing(null);
-    }
+    setSelectedProduct(product);
+    setShowPurchaseModal(true);
+  };
+
+  const handlePurchaseSuccess = () => {
+    navigate("/orders");
   };
 
   return (
@@ -187,10 +179,7 @@ const Marketplace = () => {
                             )}
                             <div className="flex items-center justify-between mb-4">
                               <div className="font-bold text-xl text-primary">
-                                ₦{Number(product.price).toLocaleString()}
-                              </div>
-                              <div className="text-sm text-muted-foreground">
-                                ${(product.price / USD_TO_NGN).toFixed(2)} USD
+                                ${Number(product.price).toFixed(2)}
                               </div>
                             </div>
                             <Button 
@@ -217,6 +206,14 @@ const Marketplace = () => {
         </div>
       </main>
       <Footer />
+      
+      {/* Purchase Request Modal */}
+      <PurchaseRequestModal
+        open={showPurchaseModal}
+        onOpenChange={setShowPurchaseModal}
+        product={selectedProduct}
+        onSuccess={handlePurchaseSuccess}
+      />
     </div>
   );
 };

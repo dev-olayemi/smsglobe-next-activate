@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 // Currency conversion utilities
 
 // Default exchange rate (fallback if API fails)
@@ -15,7 +16,7 @@ export interface ExchangeRateResult {
 
 /**
  * Fetches the current USD to NGN exchange rate
- * Uses a free API and caches the result
+ * Uses multiple reliable APIs with fallbacks
  */
 export async function getUsdToNgnRate(): Promise<ExchangeRateResult> {
   const now = Date.now();
@@ -25,35 +26,54 @@ export async function getUsdToNgnRate(): Promise<ExchangeRateResult> {
     return { rate: cachedRate, source: 'cache' };
   }
   
-  try {
-    // Using exchangerate-api.com free tier
-    const response = await fetch('https://api.exchangerate-api.com/v4/latest/USD');
-    
-    if (!response.ok) {
-      throw new Error('Failed to fetch exchange rate');
+  // Try multiple APIs for better reliability
+  const apis = [
+    {
+      url: 'https://api.exchangerate-api.com/v4/latest/USD',
+      parser: (data: any) => data.rates?.NGN
+    },
+    {
+      url: 'https://api.fxratesapi.com/latest?base=USD&symbols=NGN',
+      parser: (data: any) => data.rates?.NGN
+    },
+    {
+      url: 'https://open.er-api.com/v6/latest/USD',
+      parser: (data: any) => data.rates?.NGN
     }
-    
-    const data = await response.json();
-    const rate = data.rates?.NGN;
-    
-    if (rate && typeof rate === 'number') {
-      cachedRate = rate;
-      cacheTimestamp = now;
-      return { rate, source: 'api' };
+  ];
+  
+  for (const api of apis) {
+    try {
+      const response = await fetch(api.url);
+      
+      if (!response.ok) {
+        continue; // Try next API
+      }
+      
+      const data = await response.json();
+      const rate = api.parser(data);
+      
+      if (rate && typeof rate === 'number' && rate > 0) {
+        cachedRate = rate;
+        cacheTimestamp = now;
+        console.log(`💱 Exchange rate updated: 1 USD = ₦${rate.toFixed(2)} (${api.url})`);
+        return { rate, source: 'api' };
+      }
+    } catch (error) {
+      console.warn(`Failed to fetch from ${api.url}:`, error);
+      continue; // Try next API
     }
-    
-    throw new Error('Invalid rate data');
-  } catch (error) {
-    console.error('Error fetching exchange rate:', error);
-    
-    // Return cached rate if available, even if expired
-    if (cachedRate) {
-      return { rate: cachedRate, source: 'cache' };
-    }
-    
-    // Return default rate as last resort
-    return { rate: DEFAULT_USD_TO_NGN_RATE, source: 'fallback' };
   }
+  
+  // Return cached rate if available, even if expired
+  if (cachedRate) {
+    console.log(`💱 Using cached exchange rate: 1 USD = ₦${cachedRate.toFixed(2)}`);
+    return { rate: cachedRate, source: 'cache' };
+  }
+  
+  // Return default rate as last resort
+  console.log(`💱 Using fallback exchange rate: 1 USD = ₦${DEFAULT_USD_TO_NGN_RATE}`);
+  return { rate: DEFAULT_USD_TO_NGN_RATE, source: 'fallback' };
 }
 
 /**
@@ -71,11 +91,22 @@ export function ngnToUsd(ngnAmount: number, rate: number): number {
 }
 
 /**
- * Format currency for display
+ * Format currency with proper symbols and formatting
  */
-export function formatCurrency(amount: number, currency: 'USD' | 'NGN' = 'USD'): string {
+export function formatCurrency(amount: number, currency: 'USD' | 'NGN'): string {
   if (currency === 'USD') {
-    return `$${amount.toFixed(2)}`;
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }).format(amount);
+  } else {
+    return new Intl.NumberFormat('en-NG', {
+      style: 'currency',
+      currency: 'NGN',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }).format(amount);
   }
-  return `₦${amount.toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }

@@ -99,7 +99,7 @@ const ProductDetail = () => {
   }, [slug, navigate]);
 
   const requestOnWhatsApp = () => {
-    let message = `Hello, I am interested in purchasing the following product:\n\nProduct: ${service?.name}\nPrice: ₦${Number(service?.price).toLocaleString()}\nDuration: ${service?.duration}\nProvider: ${service?.provider}\nQuantity: ${quantity}`;
+    let message = `Hello, I am interested in purchasing the following product:\n\nProduct: ${service?.name}\nPrice: $${Number(service?.price).toFixed(2)}\nDuration: ${service?.duration}\nProvider: ${service?.provider}\nQuantity: ${quantity}`;
     if (notes.trim()) {
       message += `\nAdditional Notes: ${notes}`;
     }
@@ -121,16 +121,16 @@ const ProductDetail = () => {
       return;
     }
 
-    const amountNGN = Number(service.price) * quantity;
+    const amountUSD = Number(service.price) * quantity;
     const userBalance = profile?.balance || 0;
 
-    // Check if user has sufficient balance
-    if (userBalance >= amountNGN) {
+    // Check if user has sufficient balance (both in USD)
+    if (userBalance >= amountUSD) {
       // Show confirmation dialog
       setShowConfirmDialog(true);
     } else {
       // Show insufficient balance dialog
-      setRequiredAmount(amountNGN);
+      setRequiredAmount(amountUSD);
       setCurrentBalance(userBalance);
       setShowInsufficientDialog(true);
     }
@@ -140,41 +140,48 @@ const ProductDetail = () => {
     setShowConfirmDialog(false);
     
     try {
-      const amountNGN = Number(service.price) * quantity;
-      const userBalance = profile?.balance || 0;
-      const newBalance = userBalance - amountNGN;
+      const amountUSD = Number(service.price) * quantity;
+      
+      console.log(`🛒 Starting purchase: ${service.name} for $${amountUSD}`);
+      
+      // Use the proper purchaseProduct function with atomic transactions
+      const requestDetails: any = {
+        additionalNotes: `Quantity: ${quantity}`
+      };
+      
+      // Only add specifications if notes exist (avoid undefined)
+      if (notes && notes.trim()) {
+        requestDetails.specifications = notes.trim();
+      }
+      
+      const result = await firestoreService.purchaseProduct(user.uid, service.id, requestDetails);
 
-      // Deduct balance
-      await firestoreService.updateUserBalance(user.uid, newBalance);
-
-      // Create order
-      const order = await firestoreApi.addOrder({
-        userId: user.uid,
-        productId: service.id,
-        productName: service.name,
-        amount: amountNGN,
-        currency: 'NGN',
-        quantity,
-        status: 'completed', // Mark as completed since payment is from balance
-        paymentMethod: 'balance',
-        notes,
-      });
-
-      // Add transaction record
-      await firestoreService.addBalanceTransaction({
-        userId: user.uid,
-        type: 'purchase',
-        amount: -amountNGN, // Negative for deduction
-        description: `Purchase: ${service.name}`,
-        balanceAfter: newBalance,
-      });
-
-      // Show success message and redirect
-      alert('Purchase successful! Your order has been completed.');
-      navigate('/orders');
+      if (result.success) {
+        console.log(`✅ Purchase successful: Order ${result.orderId}`);
+        
+        // Sync balance from server to ensure UI is accurate
+        setTimeout(async () => {
+          try {
+            const freshProfile = await firestoreService.getUserProfile(user.uid);
+            if (freshProfile) {
+              console.log(`🔄 Balance synced from server: ${freshProfile.balance}`);
+              // The page will navigate away, but this ensures consistency
+            }
+          } catch (syncError) {
+            console.warn("Failed to sync balance:", syncError);
+          }
+        }, 500);
+        
+        alert('Purchase successful! Your order has been completed.');
+        navigate('/orders');
+      } else {
+        console.error(`❌ Purchase failed: ${result.error}`);
+        alert(result.error || 'Failed to complete purchase. Please try again.');
+      }
     } catch (err) {
-      console.error('Purchase error', err);
-      alert('Failed to complete purchase. Please try again.');
+      console.error('❌ Purchase error:', err);
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
+      alert(`Failed to complete purchase: ${errorMessage}`);
     }
   };
 
@@ -367,11 +374,11 @@ const ProductDetail = () => {
                   <span className="text-sm text-muted-foreground">Price per Unit</span>
                   {service.comparePrice ? (
                     <div className="flex items-baseline gap-2">
-                      <span className="text-sm text-muted-foreground line-through">₦{Number(service.comparePrice).toLocaleString()}</span>
-                      <span className="text-2xl font-bold text-primary">₦{Number(service.price).toLocaleString()}</span>
+                      <span className="text-sm text-muted-foreground line-through">${Number(service.comparePrice).toFixed(2)}</span>
+                      <span className="text-2xl font-bold text-primary">${Number(service.price).toFixed(2)}</span>
                     </div>
                   ) : (
-                    <span className="text-2xl font-bold">₦{Number(service.price).toLocaleString()}</span>
+                    <span className="text-2xl font-bold">${Number(service.price).toFixed(2)}</span>
                   )}
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">Includes all applicable taxes</p>
@@ -439,7 +446,7 @@ const ProductDetail = () => {
                 <div className="flex items-center justify-between text-sm text-muted-foreground mb-2">
                   <span>Total</span>
                   <span className="text-lg font-semibold text-foreground">
-                    ₦{(Number(service.price) * quantity).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    ${(Number(service.price) * quantity).toFixed(2)}
                   </span>
                 </div>
                 <div className="h-px bg-border" />
@@ -510,7 +517,7 @@ const ProductDetail = () => {
           <AlertDialogHeader>
             <AlertDialogTitle>Confirm Purchase</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to purchase {quantity}x {service?.name} for ₦{Number(service?.price * quantity).toLocaleString()}?
+              Are you sure you want to purchase {quantity}x {service?.name} for ${Number(service?.price * quantity).toFixed(2)}?
               This amount will be deducted from your account balance.
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -527,7 +534,7 @@ const ProductDetail = () => {
           <AlertDialogHeader>
             <AlertDialogTitle>Insufficient Balance</AlertDialogTitle>
             <AlertDialogDescription>
-              You need ₦{requiredAmount.toLocaleString()} to complete this order, but you currently have ₦{currentBalance.toLocaleString()} in your account.
+              You need ${requiredAmount.toFixed(2)} to complete this order, but you currently have ${currentBalance.toFixed(2)} in your account.
               Please fund your account to proceed with the purchase.
             </AlertDialogDescription>
           </AlertDialogHeader>

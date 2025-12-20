@@ -12,7 +12,6 @@ import Pricing from "./pages/Pricing";
 import About from "./pages/About";
 import Profile from "./pages/Profile";
 import Transactions from "./pages/Transactions";
-import PaymentCallback from "./pages/PaymentCallback";
 import Receipt from "./pages/Receipt";
 import NotFound from "./pages/NotFound";
 import Admin from "./pages/Admin";
@@ -26,6 +25,15 @@ import EsimCategories from "./pages/EsimCategories";
 import EsimCategoryProducts from "./pages/EsimCategoryProducts";
 import SMSOrders from "./pages/SMSOrders";
 import Marketplace from "./pages/Marketplace";
+import RDPProducts from "./pages/RDPProducts";
+import GiftCardProducts from "./pages/GiftCardProducts";
+import GiftCatalog from "./pages/GiftCatalog";
+import GiftDetail from "./pages/GiftDetail";
+import GiftTracking from "./pages/GiftTracking";
+import MyOrders from "./pages/MyOrders";
+import CustomGiftRequest from "./pages/CustomGiftRequest";
+import Support from "./pages/Support";
+import PaviorWidget from "./components/PaviorWidget";
 
 const queryClient = new QueryClient();
 
@@ -35,6 +43,7 @@ const App = () => (
       <TooltipProvider>
         <Toaster />
         <Sonner />
+        <PaviorWidget />
         <BrowserRouter>
           <Routes>
             <Route path="/" element={<Index />} />
@@ -48,6 +57,15 @@ const App = () => (
             <Route path="/esim-categories" element={<EsimCategories />} />
             <Route path="/esim-category/:category" element={<EsimCategoryProducts />} />
             <Route path="/vpn-and-proxy" element={<VpnAndProxy />} />
+            <Route path="/rdp" element={<RDPProducts />} />
+            <Route path="/rdp/:subcategory" element={<RDPProducts />} />
+            <Route path="/gift-cards" element={<GiftCardProducts />} />
+            <Route path="/gift-cards/:subcategory" element={<GiftCardProducts />} />
+            <Route path="/gifts" element={<GiftCatalog />} />
+            <Route path="/gift/:slug" element={<GiftDetail />} />
+            <Route path="/gift-tracking/:trackingCode" element={<GiftTracking />} />
+            <Route path="/my-orders" element={<MyOrders />} />
+            <Route path="/custom-gift-request" element={<CustomGiftRequest />} />
             <Route path="/sms" element={<SMSOrders />} />
             <Route path="/marketplace" element={<Marketplace />} />
             <Route path="/provider/:provider" element={<ProviderProducts />} />
@@ -57,7 +75,7 @@ const App = () => (
             <Route path="/profile" element={<Profile />} />
             <Route path="/transactions" element={<Transactions />} />
             <Route path="/receipt/:txRef" element={<Receipt />} />
-            <Route path="/payment-callback" element={<PaymentCallback />} />
+            <Route path="/support" element={<Support />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
