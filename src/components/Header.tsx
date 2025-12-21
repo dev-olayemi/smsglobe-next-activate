@@ -208,33 +208,35 @@ export const Header = () => {
                 <Menu className="h-6 w-6" />
               </Button>
             </SheetTrigger>
-            <SheetContent side="right" className="w-80">
+            <SheetContent side="right" className="w-80 flex flex-col">
               <VisuallyHidden>
                 <SheetTitle>Navigation Menu</SheetTitle>
                 <SheetDescription>Main navigation and account options</SheetDescription>
               </VisuallyHidden>
 
               <div className="flex flex-col h-full">
-                <div className="flex items-center justify-between mb-8">
+                {/* Header */}
+                <div className="flex items-center justify-between mb-6 px-2">
                   <Link to="/" className="flex items-center gap-2">
                     <img src={logo} alt="SMSGlobe" className="h-8" />
                   </Link>
                 </div>
 
+                {/* User Balance Section */}
                 {user && (
-                  <div className="mb-6 px-4">
-                    <div className="flex items-center gap-3 bg-muted/50 p-4 rounded-lg">
-                      <Avatar className="h-12 w-12">
+                  <div className="mb-4 px-2">
+                    <div className="flex items-center gap-3 bg-muted/50 p-3 rounded-lg">
+                      <Avatar className="h-10 w-10">
                         <AvatarImage src={(user as any)?.photoURL} />
-                        <AvatarFallback className="text-lg">
+                        <AvatarFallback className="text-sm">
                           {(user as any)?.displayName?.charAt(0).toUpperCase() ||
                             (user as any)?.email?.charAt(0).toUpperCase() ||
                             "U"}
                         </AvatarFallback>
                       </Avatar>
-                      <div>
-                        <p className="text-sm text-muted-foreground">Account Balance</p>
-                        <p className="text-xl font-bold">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs text-muted-foreground">Account Balance</p>
+                        <p className="text-lg font-bold truncate">
                           ${profile?.balance !== undefined ? Number(profile.balance).toFixed(2) : "0.00"} USD
                         </p>
                       </div>
@@ -242,56 +244,60 @@ export const Header = () => {
                   </div>
                 )}
 
-                <nav className="flex-1 space-y-1 px-2">
-                  {(user ? authNavItems : publicNavItems).map((item) => {
-                    const Icon = (item as any).icon;
-                    return (
+                {/* Scrollable Navigation */}
+                <div className="flex-1 overflow-y-auto px-2">
+                  <nav className="space-y-1 pb-4">
+                    {(user ? authNavItems : publicNavItems).map((item) => {
+                      const Icon = (item as any).icon;
+                      return (
+                        <Link
+                          key={item.to}
+                          to={item.to}
+                          className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                            isActive(item.to)
+                              ? "bg-primary/10 text-primary"
+                              : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                          }`}
+                        >
+                          {Icon && <Icon className="h-4 w-4 flex-shrink-0" />}
+                          <span className="truncate">{item.label}</span>
+                        </Link>
+                      );
+                    })}
+                    {isAdmin && user && (
                       <Link
-                        key={item.to}
-                        to={item.to}
-                        className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
-                          isActive(item.to)
+                        to="/admin"
+                        className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                          isActive("/admin")
                             ? "bg-primary/10 text-primary"
                             : "text-muted-foreground hover:bg-muted hover:text-foreground"
                         }`}
                       >
-                        {Icon && <Icon className="h-5 w-5" />}
-                        {item.label}
+                        <Crown className="h-4 w-4 flex-shrink-0" />
+                        <span className="truncate">Admin</span>
                       </Link>
-                    );
-                  })}
-                  {isAdmin && user && (
-                    <Link
-                      to="/admin"
-                      className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
-                        isActive("/admin")
-                          ? "bg-primary/10 text-primary"
-                          : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                      }`}
-                    >
-                      <Crown className="h-5 w-5" />
-                      Admin
-                    </Link>
-                  )}
-                </nav>
+                    )}
+                  </nav>
+                </div>
 
-                <div className="border-t pt-6 space-y-3 px-4">
+                {/* Fixed Bottom Actions */}
+                <div className="border-t pt-4 space-y-2 px-2 pb-2">
                   {user ? (
                     <>
-                      <Button variant="outline" className="w-full" asChild>
-                        <Link to="/top-up">Top Up</Link>
+                      <Button variant="outline" size="sm" className="w-full" asChild>
+                        <Link to="/top-up">Top Up Balance</Link>
                       </Button>
-                      <Button variant="destructive" className="w-full gap-2" onClick={handleLogout}>
+                      <Button variant="destructive" size="sm" className="w-full gap-2" onClick={handleLogout}>
                         <LogOut className="h-4 w-4" />
                         Logout
                       </Button>
                     </>
                   ) : (
                     <>
-                      <Button variant="outline" className="w-full" asChild>
+                      <Button variant="outline" size="sm" className="w-full" asChild>
                         <Link to="/login">Login</Link>
                       </Button>
-                      <Button className="w-full shadow-md" asChild>
+                      <Button size="sm" className="w-full shadow-md" asChild>
                         <Link to="/signup">Get Started</Link>
                       </Button>
                     </>
