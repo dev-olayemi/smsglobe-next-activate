@@ -84,13 +84,14 @@ export function AdminSidebar({ collapsed = false, onToggleCollapse }: AdminSideb
   return (
     <div className={cn(
       "relative flex flex-col border-r bg-background transition-all duration-300",
-      collapsed ? "w-16" : "w-64"
+      collapsed ? "w-16" : "w-64",
+      "hidden md:flex" // Hide on mobile, show on desktop
     )}>
       {/* Toggle Button */}
       <Button
         variant="ghost"
         size="icon"
-        className="absolute -right-3 top-6 z-10 h-6 w-6 rounded-full border bg-background shadow-md"
+        className="absolute -right-3 top-6 z-10 h-6 w-6 rounded-full border bg-background shadow-md hidden md:flex"
         onClick={onToggleCollapse}
       >
         {collapsed ? (

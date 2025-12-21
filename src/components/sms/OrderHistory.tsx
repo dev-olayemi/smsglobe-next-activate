@@ -99,11 +99,11 @@ export const OrderHistory: React.FC<OrderHistoryProps> = ({ userId }) => {
 
   if (loading) {
     return (
-      <Card>
+      <Card className="mx-2 sm:mx-0">
         <CardContent className="pt-6">
-          <div className="flex items-center justify-center py-8">
-            <RefreshCw className="h-8 w-8 animate-spin text-blue-600 mr-3" />
-            <span>Loading order history...</span>
+          <div className="flex items-center justify-center py-6 sm:py-8">
+            <RefreshCw className="h-6 w-6 sm:h-8 sm:w-8 animate-spin text-blue-600 mr-3" />
+            <span className="text-sm sm:text-base">Loading order history...</span>
           </div>
         </CardContent>
       </Card>
@@ -112,12 +112,12 @@ export const OrderHistory: React.FC<OrderHistoryProps> = ({ userId }) => {
 
   if (orders.length === 0) {
     return (
-      <Card>
+      <Card className="mx-2 sm:mx-0">
         <CardContent className="pt-6">
-          <div className="text-center py-8">
-            <Clock className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No Order History</h3>
-            <p className="text-gray-600">You haven't placed any SMS orders yet.</p>
+          <div className="text-center py-6 sm:py-8">
+            <Clock className="h-8 w-8 sm:h-12 sm:w-12 text-gray-400 mx-auto mb-4" />
+            <h3 className="text-base sm:text-lg font-medium text-gray-900 mb-2">No Order History</h3>
+            <p className="text-sm sm:text-base text-gray-600">You haven't placed any SMS orders yet.</p>
           </div>
         </CardContent>
       </Card>
@@ -125,11 +125,11 @@ export const OrderHistory: React.FC<OrderHistoryProps> = ({ userId }) => {
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex justify-between items-center">
-        <h2 className="text-xl font-semibold">Order History ({orders.length})</h2>
-        <Button variant="outline" size="sm" onClick={loadOrders}>
-          <RefreshCw className="h-4 w-4 mr-2" />
+    <div className="space-y-4 px-2 sm:px-0">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-0">
+        <h2 className="text-lg sm:text-xl font-semibold">Order History ({orders.length})</h2>
+        <Button variant="outline" size="sm" onClick={loadOrders} className="w-full sm:w-auto">
+          <RefreshCw className="h-3 w-3 sm:h-4 sm:w-4 mr-2" />
           Refresh
         </Button>
       </div>
@@ -137,20 +137,20 @@ export const OrderHistory: React.FC<OrderHistoryProps> = ({ userId }) => {
       {orders.map((order) => (
         <Card key={order.id} className="overflow-hidden">
           <CardHeader className="pb-3">
-            <div className="flex justify-between items-start">
-              <div className="space-y-1">
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <span className="font-mono">{order.mdn || 'N/A'}</span>
+            <div className="flex flex-col sm:flex-row justify-between items-start gap-3 sm:gap-0">
+              <div className="space-y-1 flex-1">
+                <CardTitle className="text-base sm:text-lg flex flex-col sm:flex-row items-start sm:items-center gap-2">
+                  <span className="font-mono text-sm sm:text-base">{order.mdn || 'N/A'}</span>
                 </CardTitle>
-                <div className="flex items-center gap-4 text-sm text-gray-600">
+                <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-xs sm:text-sm text-gray-600">
                   <span>{order.service}</span>
-                  <span>•</span>
+                  <span className="hidden sm:inline">•</span>
                   <span className="flex items-center gap-1">
                     <DollarSign className="h-3 w-3" />
                     {order.price.toFixed(2)}
                   </span>
-                  <span>•</span>
-                  <span>{formatDate(order.createdAt)}</span>
+                  <span className="hidden sm:inline">•</span>
+                  <span className="text-xs">{formatDate(order.createdAt)}</span>
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -162,12 +162,12 @@ export const OrderHistory: React.FC<OrderHistoryProps> = ({ userId }) => {
                   variant="ghost"
                   size="sm"
                   onClick={() => toggleOrderExpansion(order.id)}
-                  className="h-8 w-8 p-0"
+                  className="h-6 w-6 sm:h-8 sm:w-8 p-0"
                 >
                   {expandedOrders.has(order.id) ? (
-                    <ChevronUp className="h-4 w-4" />
+                    <ChevronUp className="h-3 w-3 sm:h-4 sm:w-4" />
                   ) : (
-                    <ChevronDown className="h-4 w-4" />
+                    <ChevronDown className="h-3 w-3 sm:h-4 sm:w-4" />
                   )}
                 </Button>
               </div>
@@ -177,7 +177,7 @@ export const OrderHistory: React.FC<OrderHistoryProps> = ({ userId }) => {
           {expandedOrders.has(order.id) && (
             <CardContent className="space-y-4 border-t bg-gray-50">
               {/* Order Details */}
-              <div className="grid grid-cols-2 gap-4 text-sm">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 text-xs sm:text-sm">
                 <div>
                   <span className="font-medium text-gray-700">Order Type:</span>
                   <p className="text-gray-600 capitalize">
@@ -189,7 +189,7 @@ export const OrderHistory: React.FC<OrderHistoryProps> = ({ userId }) => {
                 </div>
                 <div>
                   <span className="font-medium text-gray-700">External ID:</span>
-                  <p className="text-gray-600 font-mono text-xs">{order.externalId}</p>
+                  <p className="text-gray-600 font-mono text-xs break-all">{order.externalId}</p>
                 </div>
                 <div>
                   <span className="font-medium text-gray-700">Base Price:</span>
@@ -201,12 +201,12 @@ export const OrderHistory: React.FC<OrderHistoryProps> = ({ userId }) => {
                 </div>
                 <div>
                   <span className="font-medium text-gray-700">Expires At:</span>
-                  <p className="text-gray-600">{formatDate(order.expiresAt)}</p>
+                  <p className="text-gray-600 text-xs">{formatDate(order.expiresAt)}</p>
                 </div>
                 {order.completedAt && (
                   <div>
                     <span className="font-medium text-gray-700">Completed At:</span>
-                    <p className="text-gray-600">{formatDate(order.completedAt)}</p>
+                    <p className="text-gray-600 text-xs">{formatDate(order.completedAt)}</p>
                   </div>
                 )}
               </div>
@@ -214,25 +214,25 @@ export const OrderHistory: React.FC<OrderHistoryProps> = ({ userId }) => {
               {/* SMS Messages */}
               {order.smsMessages && order.smsMessages.length > 0 && (
                 <div className="space-y-2">
-                  <h4 className="font-medium flex items-center gap-2">
-                    <MessageSquare className="h-4 w-4" />
+                  <h4 className="font-medium flex items-center gap-2 text-sm sm:text-base">
+                    <MessageSquare className="h-3 w-3 sm:h-4 sm:w-4" />
                     SMS Messages ({order.smsMessages.length})
                   </h4>
-                  <div className="space-y-2 max-h-40 overflow-y-auto">
+                  <div className="space-y-2 max-h-32 sm:max-h-40 overflow-y-auto">
                     {order.smsMessages.map((message) => (
                       <div key={message.id} className="bg-white p-3 rounded-lg border">
-                        <div className="flex justify-between items-start mb-1">
-                          <span className="text-sm font-medium text-gray-900">
+                        <div className="flex flex-col sm:flex-row justify-between items-start gap-1 mb-1">
+                          <span className="text-xs sm:text-sm font-medium text-gray-900">
                             From: {message.from}
                           </span>
                           <span className="text-xs text-gray-500">
                             {new Date(message.dateTime).toLocaleTimeString()}
                           </span>
                         </div>
-                        <p className="text-sm text-gray-700">{message.reply}</p>
+                        <p className="text-xs sm:text-sm text-gray-700 break-words">{message.reply}</p>
                         {message.pin && (
                           <div className="mt-2 p-2 bg-blue-50 rounded border-l-4 border-blue-400">
-                            <span className="text-sm font-medium text-blue-800">
+                            <span className="text-xs sm:text-sm font-medium text-blue-800">
                               Verification Code: {message.pin}
                             </span>
                           </div>
@@ -246,8 +246,8 @@ export const OrderHistory: React.FC<OrderHistoryProps> = ({ userId }) => {
               {/* No Messages */}
               {(!order.smsMessages || order.smsMessages.length === 0) && (
                 <div className="text-center py-4 text-gray-500">
-                  <MessageSquare className="h-8 w-8 mx-auto mb-2 text-gray-400" />
-                  <p className="text-sm">No SMS messages received</p>
+                  <MessageSquare className="h-6 w-6 sm:h-8 sm:w-8 mx-auto mb-2 text-gray-400" />
+                  <p className="text-xs sm:text-sm">No SMS messages received</p>
                 </div>
               )}
             </CardContent>

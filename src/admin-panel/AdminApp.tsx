@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation, NavLink } from 'react-router-dom';
 import { AdminAuthProvider, useAdminAuth } from './auth/AdminAuthContext';
 import { AdminLogin } from './auth/AdminLogin';
 import { AdminForgotPassword } from './auth/AdminForgotPassword';
@@ -16,16 +16,110 @@ import { SMSManagement } from './pages/SMSManagement';
 import { AdminSidebar } from './components/AdminSidebar';
 import { AdminHeader } from './components/AdminHeader';
 import { AdminFooter } from './components/AdminFooter';
-import { Loader2 } from 'lucide-react';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Loader2, LayoutDashboard, Users, Package, ShoppingCart, Gift, CreditCard, Settings, BarChart3, MessageSquare } from 'lucide-react';
+import { useState } from 'react';
+
+
+const navigationItems = [
+  {
+    title: 'Dashboard',
+    href: '/admin/dashboard',
+    icon: LayoutDashboard,
+  },
+  {
+    title: 'Users',
+    href: '/admin/users',
+    icon: Users,
+  },
+  {
+    title: 'Products',
+    href: '/admin/products',
+    icon: Package,
+  },
+  {
+    title: 'Orders',
+    href: '/admin/orders',
+    icon: ShoppingCart,
+  },
+  {
+    title: 'Gifts',
+    href: '/admin/gifts',
+    icon: Gift,
+  },
+  {
+    title: 'Transactions',
+    href: '/admin/transactions',
+    icon: CreditCard,
+  },
+  {
+    title: 'SMS Management',
+    href: '/admin/sms-management',
+    icon: MessageSquare,
+  },
+  {
+    title: 'Reports',
+    href: '/admin/reports',
+    icon: BarChart3,
+  },
+  {
+    title: 'Settings',
+    href: '/admin/settings',
+    icon: Settings,
+  },
+];
 
 function AdminLayout({ children }: { children: React.ReactNode }) {
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
   return (
     <div className="min-h-screen bg-gray-50">
-      <AdminHeader />
+      <AdminHeader 
+        onMobileMenuToggle={() => setMobileMenuOpen(!mobileMenuOpen)}
+        mobileMenuOpen={mobileMenuOpen}
+      />
       <div className="flex">
-        <AdminSidebar />
-        <main className="flex-1 p-6">
-          {children}
+        {/* Desktop Sidebar */}
+        <AdminSidebar 
+          collapsed={sidebarCollapsed}
+          onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
+        />
+        
+        {/* Mobile Sidebar Overlay */}
+        {mobileMenuOpen && (
+          <div className="fixed inset-0 z-50 md:hidden">
+            <div 
+              className="fixed inset-0 bg-black/50" 
+              onClick={() => setMobileMenuOpen(false)}
+            />
+            <div className="fixed left-0 top-0 h-full w-64 bg-background border-r">
+              <div className="p-4 border-b">
+                <h2 className="font-semibold">Admin Panel</h2>
+              </div>
+              <ScrollArea className="flex-1 px-3 py-4">
+                <nav className="space-y-2">
+                  {navigationItems.map((item) => (
+                    <NavLink
+                      key={item.href}
+                      to={item.href.replace('/admin', '/admin')}
+                      className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground"
+                      onClick={() => setMobileMenuOpen(false)}
+                    >
+                      <item.icon className="h-4 w-4 flex-shrink-0" />
+                      <span>{item.title}</span>
+                    </NavLink>
+                  ))}
+                </nav>
+              </ScrollArea>
+            </div>
+          </div>
+        )}
+        
+        <main className="flex-1 p-3 sm:p-6 overflow-x-hidden">
+          <div className="max-w-full">
+            {children}
+          </div>
         </main>
       </div>
       <AdminFooter />

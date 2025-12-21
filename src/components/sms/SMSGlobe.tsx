@@ -100,7 +100,14 @@ export const SMSGlobe: React.FC = () => {
     return flagService.getEmojiFlag(countryCode);
   };
 
-  // Get service icon (using simple emoji mapping)
+  // Get service logo using Clearbit API with proper fallback
+  const getServiceLogo = (serviceName: string) => {
+    // Clean the service name for URL
+    const cleanName = serviceName.toLowerCase().replace(/\s+/g, '').replace(/[^a-z0-9]/g, '');
+    return `https://logo.clearbit.com/${cleanName}.com`;
+  };
+
+  // Get service icon emoji as fallback
   const getServiceIcon = (serviceName: string) => {
     const iconMap: Record<string, string> = {
       'WhatsApp': '💬',
@@ -321,7 +328,7 @@ export const SMSGlobe: React.FC = () => {
                         disabled={loading}
                       >
                         <img
-                          src={`https://logo.clearbit.com/${service.name.toLowerCase().replace(/\s+/g, '')}.com`}
+                          src={getServiceLogo(service.name)}
                           alt={service.name}
                           className="w-6 h-6 sm:w-8 sm:h-8 rounded"
                           onError={(e) => {
@@ -450,7 +457,7 @@ export const SMSGlobe: React.FC = () => {
                       <span className="text-xs sm:text-sm text-gray-600">Service:</span>
                       <div className="flex items-center gap-2">
                         <img
-                          src={`https://logo.clearbit.com/${selectedService.toLowerCase().replace(/\s+/g, '')}.com`}
+                          src={getServiceLogo(selectedService)}
                           alt={selectedService}
                           className="w-4 h-4 sm:w-5 sm:h-5 rounded"
                           onError={(e) => {

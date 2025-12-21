@@ -111,26 +111,31 @@ const Orders = () => {
     <div className="min-h-screen flex flex-col">
       <Header />
       <main className="flex-1 container px-4 py-8">
-        <div className="max-w-6xl mx-auto space-y-6">
-          <div>
-            <h1 className="text-2xl md:text-3xl font-bold mb-2">My Orders</h1>
-            <p className="text-muted-foreground">
+        <div className="max-w-6xl mx-auto space-y-4 sm:space-y-6">
+          <div className="px-2 sm:px-0">
+            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold mb-2">My Orders</h1>
+            <p className="text-sm sm:text-base text-muted-foreground">
               Track your eSIM, VPN, Proxy, and RDP orders
             </p>
           </div>
 
-          <Tabs defaultValue="pending" className="space-y-6">
-            <TabsList className="grid w-full max-w-md grid-cols-3">
-              <TabsTrigger value="pending" className="text-xs sm:text-sm">
-                Pending ({pendingOrders.length})
-              </TabsTrigger>
-              <TabsTrigger value="completed" className="text-xs sm:text-sm">
-                Completed ({completedOrders.length})
-              </TabsTrigger>
-              <TabsTrigger value="all" className="text-xs sm:text-sm">
-                All ({orders.length})
-              </TabsTrigger>
-            </TabsList>
+          <Tabs defaultValue="pending" className="space-y-4 sm:space-y-6">
+            <div className="px-2 sm:px-0">
+              <TabsList className="grid w-full max-w-full sm:max-w-md grid-cols-3 h-auto">
+                <TabsTrigger value="pending" className="text-xs sm:text-sm py-2 px-1 sm:px-3">
+                  <span className="hidden sm:inline">Pending ({pendingOrders.length})</span>
+                  <span className="sm:hidden">Pending<br />({pendingOrders.length})</span>
+                </TabsTrigger>
+                <TabsTrigger value="completed" className="text-xs sm:text-sm py-2 px-1 sm:px-3">
+                  <span className="hidden sm:inline">Completed ({completedOrders.length})</span>
+                  <span className="sm:hidden">Done<br />({completedOrders.length})</span>
+                </TabsTrigger>
+                <TabsTrigger value="all" className="text-xs sm:text-sm py-2 px-1 sm:px-3">
+                  <span className="hidden sm:inline">All ({orders.length})</span>
+                  <span className="sm:hidden">All<br />({orders.length})</span>
+                </TabsTrigger>
+              </TabsList>
+            </div>
 
             {/* Pending Orders */}
             <TabsContent value="pending" className="space-y-4">
@@ -222,15 +227,15 @@ const OrderCard = ({ order, onViewDetails }: { order: ProductOrder; onViewDetail
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'completed':
-        return <CheckCircle className="h-4 w-4 text-green-500" />;
+        return <CheckCircle className="h-3 w-3 sm:h-4 sm:w-4 text-green-500" />;
       case 'processing':
-        return <RefreshCw className="h-4 w-4 text-blue-500" />;
+        return <RefreshCw className="h-3 w-3 sm:h-4 sm:w-4 text-blue-500" />;
       case 'cancelled':
-        return <XCircle className="h-4 w-4 text-red-500" />;
+        return <XCircle className="h-3 w-3 sm:h-4 sm:w-4 text-red-500" />;
       case 'refunded':
-        return <RefreshCw className="h-4 w-4 text-orange-500" />;
+        return <RefreshCw className="h-3 w-3 sm:h-4 sm:w-4 text-orange-500" />;
       default:
-        return <Clock className="h-4 w-4 text-yellow-500" />;
+        return <Clock className="h-3 w-3 sm:h-4 sm:w-4 text-yellow-500" />;
     }
   };
 
@@ -251,21 +256,21 @@ const OrderCard = ({ order, onViewDetails }: { order: ProductOrder; onViewDetail
 
   return (
     <Card className="hover:shadow-md transition-shadow">
-      <CardContent className="p-6">
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex-1 space-y-2">
-            <div className="flex items-center gap-2">
-              <h3 className="font-semibold">{order.productName}</h3>
-              <Badge variant="secondary" className={`${getStatusColor(order.status)} text-white`}>
+      <CardContent className="p-4 sm:p-6">
+        <div className="flex flex-col sm:flex-row items-start justify-between gap-3 sm:gap-4">
+          <div className="flex-1 space-y-2 w-full sm:w-auto">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+              <h3 className="font-semibold text-sm sm:text-base">{order.productName}</h3>
+              <Badge variant="secondary" className={`${getStatusColor(order.status)} text-white w-fit`}>
                 {order.status}
               </Badge>
             </div>
             
-            <div className="flex items-center gap-4 text-sm text-muted-foreground">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4 text-xs sm:text-sm text-muted-foreground">
               <span>Order #{order.id.slice(-8)}</span>
-              <span>•</span>
+              <span className="hidden sm:inline">•</span>
               <span>{formatCurrency(order.price, 'USD')}</span>
-              <span>•</span>
+              <span className="hidden sm:inline">•</span>
               <span>
                 {order.createdAt?.toDate 
                   ? format(order.createdAt.toDate(), "MMM dd, yyyy")
@@ -275,7 +280,7 @@ const OrderCard = ({ order, onViewDetails }: { order: ProductOrder; onViewDetail
             </div>
 
             {order.requestDetails && (
-              <div className="text-sm text-muted-foreground">
+              <div className="text-xs sm:text-sm text-muted-foreground space-y-1 sm:space-y-0">
                 {order.requestDetails.location && (
                   <span className="inline-flex items-center gap-1">
                     <MapPin className="h-3 w-3" />
@@ -283,7 +288,7 @@ const OrderCard = ({ order, onViewDetails }: { order: ProductOrder; onViewDetail
                   </span>
                 )}
                 {order.requestDetails.duration && (
-                  <span className="inline-flex items-center gap-1 ml-3">
+                  <span className="inline-flex items-center gap-1 sm:ml-3">
                     <Calendar className="h-3 w-3" />
                     {order.requestDetails.duration}
                   </span>
@@ -292,14 +297,15 @@ const OrderCard = ({ order, onViewDetails }: { order: ProductOrder; onViewDetail
             )}
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
             {getStatusIcon(order.status)}
             <Button 
               variant="outline" 
               size="sm"
               onClick={() => onViewDetails(order)}
+              className="text-xs sm:text-sm"
             >
-              <Eye className="h-4 w-4 mr-1" />
+              <Eye className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
               View
             </Button>
           </div>
@@ -320,24 +326,24 @@ const OrderDetailsModal = ({
   onCopy: (text: string) => void;
 }) => {
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-      <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-        <CardHeader>
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-2 sm:p-4 z-50">
+      <Card className="w-full max-w-2xl max-h-[95vh] sm:max-h-[90vh] overflow-y-auto">
+        <CardHeader className="pb-4">
           <div className="flex items-center justify-between">
-            <CardTitle>Order Details</CardTitle>
-            <Button variant="ghost" size="sm" onClick={onClose}>
+            <CardTitle className="text-lg sm:text-xl">Order Details</CardTitle>
+            <Button variant="ghost" size="sm" onClick={onClose} className="h-8 w-8 p-0">
               ✕
             </Button>
           </div>
-          <CardDescription>
+          <CardDescription className="text-sm">
             Order #{order.id.slice(-8)} • {order.productName}
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-6">
+        <CardContent className="space-y-4 sm:space-y-6 px-4 sm:px-6">
           {/* Order Status */}
-          <div className="flex items-center gap-2">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2">
             <span className="text-sm font-medium">Status:</span>
-            <Badge variant="secondary" className={`${order.status === 'completed' ? 'bg-green-500' : order.status === 'processing' ? 'bg-blue-500' : 'bg-yellow-500'} text-white`}>
+            <Badge variant="secondary" className={`${order.status === 'completed' ? 'bg-green-500' : order.status === 'processing' ? 'bg-blue-500' : 'bg-yellow-500'} text-white w-fit`}>
               {order.status}
             </Badge>
           </div>
@@ -347,40 +353,40 @@ const OrderDetailsModal = ({
           {/* Request Details */}
           {order.requestDetails && (
             <div className="space-y-3">
-              <h4 className="font-medium">Your Request</h4>
+              <h4 className="font-medium text-sm sm:text-base">Your Request</h4>
               {order.requestDetails.location && (
                 <div className="flex items-start gap-2">
-                  <MapPin className="h-4 w-4 mt-0.5 text-muted-foreground" />
-                  <div>
+                  <MapPin className="h-4 w-4 mt-0.5 text-muted-foreground flex-shrink-0" />
+                  <div className="min-w-0 flex-1">
                     <span className="text-sm font-medium">Location:</span>
-                    <p className="text-sm text-muted-foreground">{order.requestDetails.location}</p>
+                    <p className="text-sm text-muted-foreground break-words">{order.requestDetails.location}</p>
                   </div>
                 </div>
               )}
               {order.requestDetails.duration && (
                 <div className="flex items-start gap-2">
-                  <Calendar className="h-4 w-4 mt-0.5 text-muted-foreground" />
-                  <div>
+                  <Calendar className="h-4 w-4 mt-0.5 text-muted-foreground flex-shrink-0" />
+                  <div className="min-w-0 flex-1">
                     <span className="text-sm font-medium">Duration:</span>
-                    <p className="text-sm text-muted-foreground">{order.requestDetails.duration}</p>
+                    <p className="text-sm text-muted-foreground break-words">{order.requestDetails.duration}</p>
                   </div>
                 </div>
               )}
               {order.requestDetails.specifications && (
                 <div className="flex items-start gap-2">
-                  <Settings className="h-4 w-4 mt-0.5 text-muted-foreground" />
-                  <div>
+                  <Settings className="h-4 w-4 mt-0.5 text-muted-foreground flex-shrink-0" />
+                  <div className="min-w-0 flex-1">
                     <span className="text-sm font-medium">Specifications:</span>
-                    <p className="text-sm text-muted-foreground">{order.requestDetails.specifications}</p>
+                    <p className="text-sm text-muted-foreground break-words">{order.requestDetails.specifications}</p>
                   </div>
                 </div>
               )}
               {order.requestDetails.additionalNotes && (
                 <div className="flex items-start gap-2">
-                  <FileText className="h-4 w-4 mt-0.5 text-muted-foreground" />
-                  <div>
+                  <FileText className="h-4 w-4 mt-0.5 text-muted-foreground flex-shrink-0" />
+                  <div className="min-w-0 flex-1">
                     <span className="text-sm font-medium">Additional Notes:</span>
-                    <p className="text-sm text-muted-foreground">{order.requestDetails.additionalNotes}</p>
+                    <p className="text-sm text-muted-foreground break-words">{order.requestDetails.additionalNotes}</p>
                   </div>
                 </div>
               )}
@@ -392,21 +398,22 @@ const OrderDetailsModal = ({
             <>
               <Separator />
               <div className="space-y-3">
-                <h4 className="font-medium text-green-600">✅ Order Completed</h4>
+                <h4 className="font-medium text-green-600 text-sm sm:text-base">✅ Order Completed</h4>
                 
                 {order.adminResponse.credentials && (
-                  <div className="p-4 bg-muted rounded-lg">
+                  <div className="p-3 sm:p-4 bg-muted rounded-lg">
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-sm font-medium">Access Credentials</span>
                       <Button 
                         variant="ghost" 
                         size="sm"
                         onClick={() => onCopy(order.adminResponse!.credentials!)}
+                        className="h-8 w-8 p-0"
                       >
                         <Copy className="h-4 w-4" />
                       </Button>
                     </div>
-                    <code className="text-sm bg-background p-2 rounded block">
+                    <code className="text-xs sm:text-sm bg-background p-2 rounded block break-all">
                       {order.adminResponse.credentials}
                     </code>
                   </div>
@@ -415,7 +422,7 @@ const OrderDetailsModal = ({
                 {order.adminResponse.instructions && (
                   <div>
                     <span className="text-sm font-medium">Instructions:</span>
-                    <p className="text-sm text-muted-foreground mt-1">{order.adminResponse.instructions}</p>
+                    <p className="text-sm text-muted-foreground mt-1 break-words">{order.adminResponse.instructions}</p>
                   </div>
                 )}
 
@@ -429,8 +436,9 @@ const OrderDetailsModal = ({
                           variant="outline" 
                           size="sm"
                           onClick={() => window.open(link, '_blank')}
+                          className="w-full sm:w-auto text-xs sm:text-sm"
                         >
-                          <Download className="h-4 w-4 mr-1" />
+                          <Download className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
                           Download {index + 1}
                           <ExternalLink className="h-3 w-3 ml-1" />
                         </Button>
@@ -442,14 +450,14 @@ const OrderDetailsModal = ({
                 {order.adminResponse.expiryDate && (
                   <div>
                     <span className="text-sm font-medium">Expires:</span>
-                    <p className="text-sm text-muted-foreground">{order.adminResponse.expiryDate}</p>
+                    <p className="text-sm text-muted-foreground break-words">{order.adminResponse.expiryDate}</p>
                   </div>
                 )}
 
                 {order.adminResponse.supportContact && (
                   <div>
                     <span className="text-sm font-medium">Support Contact:</span>
-                    <p className="text-sm text-muted-foreground">{order.adminResponse.supportContact}</p>
+                    <p className="text-sm text-muted-foreground break-words">{order.adminResponse.supportContact}</p>
                   </div>
                 )}
               </div>
@@ -461,9 +469,9 @@ const OrderDetailsModal = ({
             <>
               <Separator />
               <div className="text-center py-4">
-                <Clock className="h-8 w-8 mx-auto mb-2 text-yellow-500" />
-                <h4 className="font-medium">Order Being Processed</h4>
-                <p className="text-sm text-muted-foreground">
+                <Clock className="h-6 w-6 sm:h-8 sm:w-8 mx-auto mb-2 text-yellow-500" />
+                <h4 className="font-medium text-sm sm:text-base">Order Being Processed</h4>
+                <p className="text-xs sm:text-sm text-muted-foreground">
                   Your order is being processed. You'll receive your access details within 24 hours.
                 </p>
               </div>
@@ -473,10 +481,10 @@ const OrderDetailsModal = ({
           <Separator />
 
           {/* Order Info */}
-          <div className="grid grid-cols-2 gap-4 text-sm">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 text-sm">
             <div>
               <span className="text-muted-foreground">Order Date:</span>
-              <p className="font-medium">
+              <p className="font-medium break-words">
                 {order.createdAt?.toDate 
                   ? format(order.createdAt.toDate(), "PPP")
                   : 'Date unavailable'
