@@ -81,7 +81,7 @@ const TopUp = () => {
       const txRef = `txn_${Date.now()}_${user.uid.slice(0, 8)}`;
 
       // Get Flutterwave public key from environment
-      const publicKey = import.meta.env.VITE_PUBLIC_FLW_PUBLIC_KEY || "FLWPUBK_TEST-fd0d29a75c03d4f19df73e0d6ac9fbfa-X";
+      const publicKey = import.meta.env.VITE_PUBLIC_FLW_PUBLIC_KEY;
 
       if (typeof window.FlutterwaveCheckout !== "function") {
         throw new Error("Flutterwave script not loaded yet. Please refresh and try again.");

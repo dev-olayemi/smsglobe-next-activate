@@ -11,6 +11,7 @@ import {
   BarChart3,
   ChevronLeft,
   ChevronRight,
+  MessageSquare,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -50,6 +51,11 @@ const navigationItems = [
     title: 'Transactions',
     href: '/admin/transactions',
     icon: CreditCard,
+  },
+  {
+    title: 'SMS Management',
+    href: '/admin/sms-management',
+    icon: MessageSquare,
   },
   {
     title: 'Reports',

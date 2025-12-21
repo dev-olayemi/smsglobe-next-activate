@@ -14,7 +14,7 @@ async function callApi<T>(action: string, params: Record<string, any> = {}): Pro
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "apikey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN2Y3ByeGFyZmlpb2trampqa2xzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjE1NTE0MjYsImV4cCI6MjA3NzEyNzQyNn0.uWWgfSDaydC7Kyn27xMvMv5szufP6xleAPuSJf19huY",
+      "apikey": import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
     },
     body: JSON.stringify({ action, ...params }),
   });

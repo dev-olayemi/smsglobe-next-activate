@@ -12,6 +12,7 @@ import { TransactionsManagement } from './pages/TransactionsManagement';
 import { SettingsManagement } from './pages/SettingsManagement';
 import { ReportsAnalytics } from './pages/ReportsAnalytics';
 import { AdminProfile } from './pages/AdminProfile';
+import { SMSManagement } from './pages/SMSManagement';
 import { AdminSidebar } from './components/AdminSidebar';
 import { AdminHeader } from './components/AdminHeader';
 import { AdminFooter } from './components/AdminFooter';
@@ -62,6 +63,7 @@ function AdminRoutes() {
           <Route path="/orders" element={<OrdersManagement />} />
           <Route path="/gifts" element={<GiftsManagement />} />
           <Route path="/transactions" element={<TransactionsManagement />} />
+          <Route path="/sms-management" element={<SMSManagement />} />
           <Route path="/settings" element={<SettingsManagement />} />
           <Route path="/reports" element={<ReportsAnalytics />} />
           <Route path="/profile" element={<AdminProfile />} />
