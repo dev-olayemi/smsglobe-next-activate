@@ -138,22 +138,22 @@ const Orders = () => {
             </div>
 
             {/* Pending Orders */}
-            <TabsContent value="pending" className="space-y-4">
+            <TabsContent value="pending" className="space-y-3 sm:space-y-4 px-2 sm:px-0">
               {pendingOrders.length === 0 ? (
-                <Card>
-                  <CardContent className="py-12 text-center">
-                    <Package className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-                    <h3 className="font-semibold mb-2">No Pending Orders</h3>
-                    <p className="text-muted-foreground mb-4">
+                <Card className="mx-0">
+                  <CardContent className="py-8 sm:py-12 text-center px-4">
+                    <Package className="h-8 w-8 sm:h-12 sm:w-12 mx-auto mb-3 sm:mb-4 text-muted-foreground" />
+                    <h3 className="font-semibold mb-2 text-sm sm:text-base">No Pending Orders</h3>
+                    <p className="text-xs sm:text-sm text-muted-foreground mb-3 sm:mb-4">
                       You don't have any pending orders at the moment.
                     </p>
-                    <Button onClick={() => navigate("/marketplace")}>
+                    <Button onClick={() => navigate("/marketplace")} size="sm" className="text-xs sm:text-sm">
                       Browse Products
                     </Button>
                   </CardContent>
                 </Card>
               ) : (
-                <div className="grid gap-4">
+                <div className="grid gap-3 sm:gap-4">
                   {pendingOrders.map((order) => (
                     <OrderCard key={order.id} order={order} onViewDetails={setSelectedOrder} />
                   ))}
@@ -162,19 +162,19 @@ const Orders = () => {
             </TabsContent>
 
             {/* Completed Orders */}
-            <TabsContent value="completed" className="space-y-4">
+            <TabsContent value="completed" className="space-y-3 sm:space-y-4 px-2 sm:px-0">
               {completedOrders.length === 0 ? (
-                <Card>
-                  <CardContent className="py-12 text-center">
-                    <CheckCircle className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-                    <h3 className="font-semibold mb-2">No Completed Orders</h3>
-                    <p className="text-muted-foreground">
+                <Card className="mx-0">
+                  <CardContent className="py-8 sm:py-12 text-center px-4">
+                    <CheckCircle className="h-8 w-8 sm:h-12 sm:w-12 mx-auto mb-3 sm:mb-4 text-muted-foreground" />
+                    <h3 className="font-semibold mb-2 text-sm sm:text-base">No Completed Orders</h3>
+                    <p className="text-xs sm:text-sm text-muted-foreground">
                       Your completed orders will appear here.
                     </p>
                   </CardContent>
                 </Card>
               ) : (
-                <div className="grid gap-4">
+                <div className="grid gap-3 sm:gap-4">
                   {completedOrders.map((order) => (
                     <OrderCard key={order.id} order={order} onViewDetails={setSelectedOrder} />
                   ))}
@@ -183,22 +183,22 @@ const Orders = () => {
             </TabsContent>
 
             {/* All Orders */}
-            <TabsContent value="all" className="space-y-4">
+            <TabsContent value="all" className="space-y-3 sm:space-y-4 px-2 sm:px-0">
               {orders.length === 0 ? (
-                <Card>
-                  <CardContent className="py-12 text-center">
-                    <Package className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-                    <h3 className="font-semibold mb-2">No Orders Yet</h3>
-                    <p className="text-muted-foreground mb-4">
+                <Card className="mx-0">
+                  <CardContent className="py-8 sm:py-12 text-center px-4">
+                    <Package className="h-8 w-8 sm:h-12 sm:w-12 mx-auto mb-3 sm:mb-4 text-muted-foreground" />
+                    <h3 className="font-semibold mb-2 text-sm sm:text-base">No Orders Yet</h3>
+                    <p className="text-xs sm:text-sm text-muted-foreground mb-3 sm:mb-4">
                       Start by browsing our marketplace for eSIMs, VPNs, Proxies, and more.
                     </p>
-                    <Button onClick={() => navigate("/marketplace")}>
+                    <Button onClick={() => navigate("/marketplace")} size="sm" className="text-xs sm:text-sm">
                       Browse Products
                     </Button>
                   </CardContent>
                 </Card>
               ) : (
-                <div className="grid gap-4">
+                <div className="grid gap-3 sm:gap-4">
                   {orders.map((order) => (
                     <OrderCard key={order.id} order={order} onViewDetails={setSelectedOrder} />
                   ))}
@@ -255,60 +255,65 @@ const OrderCard = ({ order, onViewDetails }: { order: ProductOrder; onViewDetail
   };
 
   return (
-    <Card className="hover:shadow-md transition-shadow">
-      <CardContent className="p-4 sm:p-6">
-        <div className="flex flex-col sm:flex-row items-start justify-between gap-3 sm:gap-4">
-          <div className="flex-1 space-y-2 w-full sm:w-auto">
-            <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-              <h3 className="font-semibold text-sm sm:text-base">{order.productName}</h3>
-              <Badge variant="secondary" className={`${getStatusColor(order.status)} text-white w-fit`}>
-                {order.status}
-              </Badge>
-            </div>
-            
-            <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4 text-xs sm:text-sm text-muted-foreground">
-              <span>Order #{order.id.slice(-8)}</span>
-              <span className="hidden sm:inline">•</span>
-              <span>{formatCurrency(order.price, 'USD')}</span>
-              <span className="hidden sm:inline">•</span>
-              <span>
-                {order.createdAt?.toDate 
-                  ? format(order.createdAt.toDate(), "MMM dd, yyyy")
-                  : 'Date unavailable'
-                }
-              </span>
-            </div>
-
-            {order.requestDetails && (
-              <div className="text-xs sm:text-sm text-muted-foreground space-y-1 sm:space-y-0">
-                {order.requestDetails.location && (
-                  <span className="inline-flex items-center gap-1">
-                    <MapPin className="h-3 w-3" />
-                    {order.requestDetails.location}
-                  </span>
-                )}
-                {order.requestDetails.duration && (
-                  <span className="inline-flex items-center gap-1 sm:ml-3">
-                    <Calendar className="h-3 w-3" />
-                    {order.requestDetails.duration}
-                  </span>
-                )}
+    <Card className="hover:shadow-md transition-shadow mx-0">
+      <CardContent className="p-3 sm:p-4 md:p-6">
+        <div className="flex flex-col gap-3">
+          {/* Header Row */}
+          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2">
+            <div className="flex-1 min-w-0">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2 mb-2">
+                <h3 className="font-semibold text-sm sm:text-base truncate">{order.productName}</h3>
+                <Badge variant="secondary" className={`${getStatusColor(order.status)} text-white w-fit text-xs`}>
+                  {order.status}
+                </Badge>
               </div>
-            )}
+              
+              <div className="flex flex-wrap items-center gap-1 sm:gap-2 text-xs text-muted-foreground">
+                <span>#{order.id.slice(-8)}</span>
+                <span className="hidden sm:inline">•</span>
+                <span className="font-medium text-green-600">{formatCurrency(order.price, 'USD')}</span>
+                <span className="hidden sm:inline">•</span>
+                <span>
+                  {order.createdAt?.toDate 
+                    ? format(order.createdAt.toDate(), "MMM dd, yyyy")
+                    : 'Date unavailable'
+                  }
+                </span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 justify-end sm:justify-start">
+              {getStatusIcon(order.status)}
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => onViewDetails(order)}
+                className="text-xs h-7 px-2 sm:h-8 sm:px-3"
+              >
+                <Eye className="h-3 w-3 mr-1" />
+                <span className="hidden sm:inline">View</span>
+                <span className="sm:hidden">View</span>
+              </Button>
+            </div>
           </div>
 
-          <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
-            {getStatusIcon(order.status)}
-            <Button 
-              variant="outline" 
-              size="sm"
-              onClick={() => onViewDetails(order)}
-              className="text-xs sm:text-sm"
-            >
-              <Eye className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
-              View
-            </Button>
-          </div>
+          {/* Details Row */}
+          {order.requestDetails && (
+            <div className="text-xs text-muted-foreground space-y-1 pt-2 border-t border-gray-100">
+              {order.requestDetails.location && (
+                <div className="flex items-center gap-1">
+                  <MapPin className="h-3 w-3 flex-shrink-0" />
+                  <span className="truncate">{order.requestDetails.location}</span>
+                </div>
+              )}
+              {order.requestDetails.duration && (
+                <div className="flex items-center gap-1">
+                  <Calendar className="h-3 w-3 flex-shrink-0" />
+                  <span className="truncate">{order.requestDetails.duration}</span>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </CardContent>
     </Card>
