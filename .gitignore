@@ -25,3 +25,6 @@ dist-ssr
 
 
 .env
+
+# Firebase service account keys
+deemax-3223e-firebase-adminsdk-*.json

@@ -34,6 +34,7 @@ import MyOrders from "./pages/MyOrders";
 import CustomGiftRequest from "./pages/CustomGiftRequest";
 import Support from "./pages/Support";
 import PaviorWidget from "./components/PaviorWidget";
+import { AdminApp } from "./admin-panel/AdminApp";
 
 const queryClient = new QueryClient();
 
@@ -53,6 +54,8 @@ const App = () => (
             <Route path="/pricing" element={<Pricing />} />
             <Route path="/about" element={<About />} />
             <Route path="/admin" element={<Admin />} />
+            <Route path="/admin/*" element={<AdminApp />} />
+            <Route path="/admin-panel/*" element={<AdminApp />} />
             <Route path="/esim" element={<Esim />} />
             <Route path="/esim-categories" element={<EsimCategories />} />
             <Route path="/esim-category/:category" element={<EsimCategoryProducts />} />

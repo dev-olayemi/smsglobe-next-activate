@@ -19,6 +19,8 @@ import { validatePurchaseRequest, validateTransaction, validateProductOrder, cle
 
 // User Profile
 export interface UserProfile {
+  phoneNumber: any;
+  suspended: unknown;
   id: string;
   email: string;
   username?: string;
@@ -74,7 +76,7 @@ export interface Activation {
 }
 
 // Product Category Types
-export type ProductCategory = 'esim' | 'proxy' | 'vpn' | 'rdp' | 'gift';
+export type ProductCategory = 'esim' | 'proxy' | 'vpn' | 'rdp' | 'sms' | 'gift';
 
 // Product Listing (admin-managed)
 export interface ProductListing {
@@ -100,12 +102,11 @@ export interface ProductListing {
 
 // Product Order
 export interface ProductOrder {
-  amount: any;
-  orderNumber: ReactNode;
-  amount: any;
-  deliveryInfo: any;
   id: string;
   userId: string;
+  orderNumber: string;
+  amount: number;
+  deliveryInfo: any;
   userEmail: string;
   username?: string;
   productId: string;
