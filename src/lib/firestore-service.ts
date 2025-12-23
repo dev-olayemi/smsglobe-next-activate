@@ -602,8 +602,13 @@ export const firestoreService = {
 
   // ===== SMS ORDERS =====
   async createSMSOrder(order: Omit<SMSOrder, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> {
+    // Filter out undefined values to prevent Firestore errors
+    const cleanOrder = Object.fromEntries(
+      Object.entries(order).filter(([_, value]) => value !== undefined)
+    );
+    
     const docRef = await addDoc(collection(db, "sms_orders"), {
-      ...order,
+      ...cleanOrder,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp()
     });
@@ -639,19 +644,21 @@ export const firestoreService = {
     });
   },
 
-  async addSMSMessage(orderId: string, message: Omit<SMSMessage, 'id' | 'receivedAt'>) {
+  async addSMSMessage(orderId: string, message: Omit<SMSMessageRecord, 'id'>) {
     const messageId = Date.now().toString();
-    const smsMessage: SMSMessage = {
+    const smsMessage: SMSMessageRecord = {
       ...message,
-      id: messageId,
-      receivedAt: serverTimestamp()
+      id: messageId
     };
 
     const order = await this.getSMSOrder(orderId);
     if (!order) throw new Error("SMS order not found");
 
     const updatedMessages = [...(order.smsMessages || []), smsMessage];
-    await this.updateSMSOrder(orderId, { smsMessages: updatedMessages });
+    await this.updateSMSOrder(orderId, { 
+      smsMessages: updatedMessages,
+      updatedAt: serverTimestamp()
+    });
 
     return smsMessage;
   },

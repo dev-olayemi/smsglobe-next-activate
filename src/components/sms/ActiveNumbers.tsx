@@ -106,21 +106,42 @@ export const ActiveNumbers: React.FC<ActiveNumbersProps> = ({ numbers, onRefresh
     }
   };
 
-  const formatTimeRemaining = (expiresAt: Date) => {
-    const now = new Date();
-    const timeLeft = expiresAt.getTime() - now.getTime();
-    
-    if (timeLeft <= 0) return 'Expired';
-    
-    const hours = Math.floor(timeLeft / (1000 * 60 * 60));
-    const minutes = Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60));
-    
-    if (hours > 24) {
-      const days = Math.floor(hours / 24);
-      return `${days}d ${hours % 24}h`;
+  const formatTimeRemaining = (expiresAt: Date | string | any) => {
+    try {
+      let expireDate: Date;
+      
+      // Handle Firestore Timestamp objects
+      if (expiresAt && typeof expiresAt === 'object' && expiresAt.toDate) {
+        expireDate = expiresAt.toDate();
+      } else if (expiresAt && typeof expiresAt === 'object' && expiresAt.seconds) {
+        expireDate = new Date(expiresAt.seconds * 1000);
+      } else {
+        expireDate = new Date(expiresAt);
+      }
+      
+      // Check if date is valid
+      if (isNaN(expireDate.getTime())) {
+        return 'Invalid Date';
+      }
+      
+      const now = new Date();
+      const timeLeft = expireDate.getTime() - now.getTime();
+      
+      if (timeLeft <= 0) return 'Expired';
+      
+      const hours = Math.floor(timeLeft / (1000 * 60 * 60));
+      const minutes = Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60));
+      
+      if (hours > 24) {
+        const days = Math.floor(hours / 24);
+        return `${days}d ${hours % 24}h`;
+      }
+      
+      return `${hours}h ${minutes}m`;
+    } catch (error) {
+      console.error('Error formatting time remaining:', error);
+      return 'Invalid Date';
     }
-    
-    return `${hours}h ${minutes}m`;
   };
 
   if (numbers.length === 0) {
@@ -201,11 +222,25 @@ export const ActiveNumbers: React.FC<ActiveNumbersProps> = ({ numbers, onRefresh
               <div className="flex items-center gap-2">
                 <Clock className="h-3 w-3 sm:h-4 sm:w-4 text-gray-600" />
                 <span className={
-                  new Date(number.expiresAt).getTime() - Date.now() < 60 * 60 * 1000 
-                    ? 'text-red-600 font-medium' 
-                    : 'text-gray-600'
+                  (() => {
+                    try {
+                      let expireDate: Date;
+                      if (number.expiresAt && typeof number.expiresAt === 'object' && number.expiresAt.toDate) {
+                        expireDate = number.expiresAt.toDate();
+                      } else if (number.expiresAt && typeof number.expiresAt === 'object' && number.expiresAt.seconds) {
+                        expireDate = new Date(number.expiresAt.seconds * 1000);
+                      } else {
+                        expireDate = new Date(number.expiresAt);
+                      }
+                      
+                      const timeLeft = expireDate.getTime() - Date.now();
+                      return timeLeft < 60 * 60 * 1000 ? 'text-red-600 font-medium' : 'text-gray-600';
+                    } catch {
+                      return 'text-gray-600';
+                    }
+                  })()
                 }>
-                  {formatTimeRemaining(new Date(number.expiresAt))}
+                  {formatTimeRemaining(number.expiresAt)}
                 </span>
               </div>
             </div>
@@ -225,7 +260,26 @@ export const ActiveNumbers: React.FC<ActiveNumbersProps> = ({ numbers, onRefresh
                           From: {message.from}
                         </span>
                         <span className="text-xs text-gray-500">
-                          {new Date(message.receivedAt).toLocaleTimeString()}
+                          {(() => {
+                            try {
+                              let messageDate: Date;
+                              if (message.receivedAt && typeof message.receivedAt === 'object' && message.receivedAt.toDate) {
+                                messageDate = message.receivedAt.toDate();
+                              } else if (message.receivedAt && typeof message.receivedAt === 'object' && message.receivedAt.seconds) {
+                                messageDate = new Date(message.receivedAt.seconds * 1000);
+                              } else {
+                                messageDate = new Date(message.receivedAt);
+                              }
+                              
+                              if (isNaN(messageDate.getTime())) {
+                                return 'Invalid Date';
+                              }
+                              
+                              return messageDate.toLocaleTimeString();
+                            } catch {
+                              return 'Invalid Date';
+                            }
+                          })()}
                         </span>
                       </div>
                       <p className="text-xs sm:text-sm text-gray-700 break-words">{message.text}</p>

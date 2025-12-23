@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
@@ -15,14 +14,14 @@ import {
   Globe,
   Zap,
   Shield,
-  Search,
-  DollarSign
+  Search
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { smsService } from '@/services/sms-service';
 import { smsSessionService } from '@/services/sms-session-service';
 import { flagService } from '@/services/flag-service';
-import { Service, Country, SMSNumber, UserSession } from '@/types/sms-types';
+import { ServiceIcon } from '@/components/ServiceIcon';
+import { Service, Country, SMSNumber } from '@/types/sms-types';
 import { ActiveNumbers } from './ActiveNumbers';
 import { OrderHistory } from './OrderHistory';
 import { toast } from 'sonner';
@@ -98,51 +97,6 @@ export const SMSGlobe: React.FC = () => {
   // Get emoji flag as fallback
   const getEmojiFlag = (countryCode: string) => {
     return flagService.getEmojiFlag(countryCode);
-  };
-
-  // Get service logo using Clearbit API with proper fallback
-  const getServiceLogo = (serviceName: string) => {
-    // Clean the service name for URL
-    const cleanName = serviceName.toLowerCase().replace(/\s+/g, '').replace(/[^a-z0-9]/g, '');
-    return `https://logo.clearbit.com/${cleanName}.com`;
-  };
-
-  // Get service icon emoji as fallback
-  const getServiceIcon = (serviceName: string) => {
-    const iconMap: Record<string, string> = {
-      'WhatsApp': '💬',
-      'Telegram': '✈️',
-      'Discord': '🎮',
-      'Instagram': '📷',
-      'Facebook': '👥',
-      'Twitter': '🐦',
-      'Google': '🔍',
-      'Amazon': '📦',
-      'Apple': '🍎',
-      'Microsoft': '🪟',
-      'Netflix': '🎬',
-      'Spotify': '🎵',
-      'TikTok': '🎭',
-      'LinkedIn': '💼',
-      'Uber': '🚗',
-      'PayPal': '💳',
-      'Steam': '🎮',
-      'GitHub': '👨‍💻',
-      'Dropbox': '📁',
-      'Zoom': '📹',
-      'Snapchat': '👻',
-      'Pinterest': '📌',
-      'Reddit': '🤖',
-      'Twitch': '🎮',
-      'YouTube': '📺',
-      'Skype': '📞',
-      'Viber': '📱',
-      'WeChat': '💬',
-      'Line': '💚',
-      'KakaoTalk': '💛'
-    };
-    
-    return iconMap[serviceName] || '🔗';
   };
 
   // Calculate price based on selection
@@ -327,21 +281,11 @@ export const SMSGlobe: React.FC = () => {
                         onClick={() => setSelectedService(service.name)}
                         disabled={loading}
                       >
-                        <img
-                          src={getServiceLogo(service.name)}
-                          alt={service.name}
-                          className="w-6 h-6 sm:w-8 sm:h-8 rounded"
-                          onError={(e) => {
-                            const target = e.target as HTMLImageElement;
-                            target.style.display = 'none';
-                            const emoji = target.nextElementSibling as HTMLSpanElement;
-                            if (emoji) {
-                              emoji.style.display = 'inline';
-                              emoji.textContent = getServiceIcon(service.name);
-                            }
-                          }}
+                        <ServiceIcon 
+                          serviceName={service.name}
+                          size="md"
+                          className="sm:w-8 sm:h-8"
                         />
-                        <span className="text-base sm:text-lg" style={{ display: 'none' }}></span>
                         <span className="font-medium text-center leading-tight">{service.name}</span>
                         <span className="text-muted-foreground">${service.finalPrice}</span>
                       </Button>
@@ -456,21 +400,11 @@ export const SMSGlobe: React.FC = () => {
                     <div className="flex justify-between items-center">
                       <span className="text-xs sm:text-sm text-gray-600">Service:</span>
                       <div className="flex items-center gap-2">
-                        <img
-                          src={getServiceLogo(selectedService)}
-                          alt={selectedService}
-                          className="w-4 h-4 sm:w-5 sm:h-5 rounded"
-                          onError={(e) => {
-                            const target = e.target as HTMLImageElement;
-                            target.style.display = 'none';
-                            const emoji = target.nextElementSibling as HTMLSpanElement;
-                            if (emoji) {
-                              emoji.style.display = 'inline';
-                              emoji.textContent = getServiceIcon(selectedService);
-                            }
-                          }}
+                        <ServiceIcon 
+                          serviceName={selectedService}
+                          size="sm"
+                          className="sm:w-5 sm:h-5"
                         />
-                        <span className="text-sm sm:text-base" style={{ display: 'none' }}></span>
                         <span className="font-medium text-sm sm:text-base">{selectedService}</span>
                       </div>
                     </div>

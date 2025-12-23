@@ -89,12 +89,32 @@ export const OrderHistory: React.FC<OrderHistoryProps> = ({ userId }) => {
     }
   };
 
-  const formatDate = (date: Date | string) => {
-    const d = new Date(date);
-    return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], { 
-      hour: '2-digit', 
-      minute: '2-digit' 
-    });
+  const formatDate = (date: Date | string | any) => {
+    try {
+      let d: Date;
+      
+      // Handle Firestore Timestamp objects
+      if (date && typeof date === 'object' && date.toDate) {
+        d = date.toDate();
+      } else if (date && typeof date === 'object' && date.seconds) {
+        d = new Date(date.seconds * 1000);
+      } else {
+        d = new Date(date);
+      }
+      
+      // Check if date is valid
+      if (isNaN(d.getTime())) {
+        return 'Invalid Date';
+      }
+      
+      return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], { 
+        hour: '2-digit', 
+        minute: '2-digit' 
+      });
+    } catch (error) {
+      console.error('Error formatting date:', error);
+      return 'Invalid Date';
+    }
   };
 
   if (loading) {
@@ -192,12 +212,8 @@ export const OrderHistory: React.FC<OrderHistoryProps> = ({ userId }) => {
                   <p className="text-gray-600 font-mono text-xs break-all">{order.externalId}</p>
                 </div>
                 <div>
-                  <span className="font-medium text-gray-700">Base Price:</span>
-                  <p className="text-gray-600">${order.basePrice.toFixed(2)}</p>
-                </div>
-                <div>
-                  <span className="font-medium text-gray-700">Markup:</span>
-                  <p className="text-gray-600">${order.markup.toFixed(2)}</p>
+                  <span className="font-medium text-gray-700">Total Price:</span>
+                  <p className="text-gray-600">${order.price.toFixed(2)}</p>
                 </div>
                 <div>
                   <span className="font-medium text-gray-700">Expires At:</span>

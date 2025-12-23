@@ -70,7 +70,7 @@ export interface NumberRequest {
 
 export interface TellABotResponse<T = any> {
   status: 'ok' | 'error';
-  message: string;
+  message: any;
   data?: T;
 }
 

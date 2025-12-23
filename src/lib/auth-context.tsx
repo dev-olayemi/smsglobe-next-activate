@@ -2,6 +2,7 @@ import { useState, useEffect, createContext, useContext, ReactNode } from "react
 import { User } from "firebase/auth";
 import { firebaseAuthService } from "./firebase-auth";
 import { firestoreService, UserProfile } from "./firestore-service";
+import { balanceManager } from "./balance-manager";
 
 interface AuthContextType {
   user: User | null;
@@ -14,6 +15,10 @@ interface AuthContextType {
   addToBalance: (amount: number) => void;
   deductFromBalance: (amount: number) => void;
   syncBalance: () => Promise<void>;
+  processPurchase: (amount: number, description: string, orderId?: string) => Promise<{ success: boolean; error?: string }>;
+  processDeposit: (amount: number, description: string, txRef?: string, transactionId?: string) => Promise<{ success: boolean; error?: string }>;
+  verifyBalance: () => Promise<{ isValid: boolean; discrepancy: number }>;
+  fixBalance: () => Promise<{ success: boolean; error?: string }>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -67,13 +72,109 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const syncBalance = async () => {
     if (user) {
       try {
-        const freshProfile = await firestoreService.getUserProfile(user.uid);
-        if (freshProfile && profile) {
-          setProfile({ ...profile, balance: freshProfile.balance });
+        const currentBalance = await balanceManager.getCurrentBalance(user.uid);
+        if (profile) {
+          setProfile({ ...profile, balance: currentBalance });
         }
       } catch (error) {
         console.error("Error syncing balance:", error);
       }
+    }
+  };
+
+  // Process purchase with proper balance management
+  const processPurchase = async (amount: number, description: string, orderId?: string) => {
+    if (!user) {
+      return { success: false, error: 'User not authenticated' };
+    }
+
+    try {
+      const result = await balanceManager.processPurchase(user.uid, amount, description, orderId);
+      
+      if (result.success) {
+        // Update local profile
+        if (profile) {
+          setProfile({ ...profile, balance: result.newBalance });
+        }
+      }
+      
+      return result;
+    } catch (error) {
+      console.error('Error processing purchase:', error);
+      return { 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Unknown error occurred' 
+      };
+    }
+  };
+
+  // Process deposit with proper balance management
+  const processDeposit = async (amount: number, description: string, txRef?: string, transactionId?: string) => {
+    if (!user) {
+      return { success: false, error: 'User not authenticated' };
+    }
+
+    try {
+      const result = await balanceManager.processDeposit(user.uid, amount, description, txRef, transactionId);
+      
+      if (result.success) {
+        // Update local profile
+        if (profile) {
+          setProfile({ ...profile, balance: result.newBalance });
+        }
+      }
+      
+      return result;
+    } catch (error) {
+      console.error('Error processing deposit:', error);
+      return { 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Unknown error occurred' 
+      };
+    }
+  };
+
+  // Verify balance integrity
+  const verifyBalance = async () => {
+    if (!user) {
+      return { isValid: false, discrepancy: 0 };
+    }
+
+    try {
+      const verification = await balanceManager.verifyBalanceIntegrity(user.uid);
+      return {
+        isValid: verification.isValid,
+        discrepancy: verification.discrepancy
+      };
+    } catch (error) {
+      console.error('Error verifying balance:', error);
+      return { isValid: false, discrepancy: 0 };
+    }
+  };
+
+  // Fix balance discrepancies
+  const fixBalance = async () => {
+    if (!user) {
+      return { success: false, error: 'User not authenticated' };
+    }
+
+    try {
+      const result = await balanceManager.fixBalanceDiscrepancy(user.uid);
+      
+      if (result.success) {
+        // Update local profile
+        if (profile) {
+          setProfile({ ...profile, balance: result.newBalance });
+        }
+      }
+      
+      return result;
+    } catch (error) {
+      console.error('Error fixing balance:', error);
+      return { 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Unknown error occurred' 
+      };
     }
   };
 
@@ -108,7 +209,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       updateBalance,
       addToBalance,
       deductFromBalance,
-      syncBalance
+      syncBalance,
+      processPurchase,
+      processDeposit,
+      verifyBalance,
+      fixBalance
     }}>
       {children}
     </AuthContext.Provider>
@@ -132,7 +237,11 @@ export function useAuth() {
         updateBalance: () => {},
         addToBalance: () => {},
         deductFromBalance: () => {},
-        syncBalance: async () => {}
+        syncBalance: async () => {},
+        processPurchase: async () => ({ success: false, error: 'Development mode' }),
+        processDeposit: async () => ({ success: false, error: 'Development mode' }),
+        verifyBalance: async () => ({ isValid: false, discrepancy: 0 }),
+        fixBalance: async () => ({ success: false, error: 'Development mode' })
       };
     }
     throw new Error("useAuth must be used within an AuthProvider");

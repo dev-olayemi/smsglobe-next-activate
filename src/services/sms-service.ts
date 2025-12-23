@@ -4,14 +4,14 @@ import {
   NumberRequest, 
   Service, 
   Country,
-  SMSOrder,
   SMSOrderType,
   SMSOrderStatus
 } from '../types/sms-types';
 import { tellaBotAPI } from './tellabot-api';
 import { smsPricingService } from './sms-pricing-service';
 import { smsSessionService } from './sms-session-service';
-import { firestoreService } from '../lib/firestore-service';
+import { firestoreService, SMSOrder } from '../lib/firestore-service';
+import { balanceManager } from '../lib/balance-manager';
 
 class SMSService {
   private pollingIntervals: Map<string, NodeJS.Timeout> = new Map();
@@ -34,12 +34,6 @@ class SMSService {
   // Order a new SMS number
   async orderNumber(request: NumberRequest, userId: string): Promise<{ success: boolean; orderId?: string; error?: string }> {
     try {
-      // Get user profile to check balance
-      const userProfile = await firestoreService.getUserProfile(userId);
-      if (!userProfile) {
-        return { success: false, error: 'User profile not found' };
-      }
-
       // Get service pricing
       const serviceWithPricing = await smsPricingService.getServiceWithPricing(request.service, request.country);
       
@@ -51,9 +45,16 @@ class SMSService {
         finalPrice = serviceWithPricing.finalPrice;
       }
 
-      // Check if user has sufficient balance
-      if (userProfile.balance < finalPrice) {
-        return { success: false, error: 'Insufficient balance' };
+      // Process purchase using balance manager
+      const purchaseResult = await balanceManager.processPurchase(
+        userId,
+        finalPrice,
+        `SMS Number: ${request.service} (${request.country})`,
+        undefined // orderId will be generated after order creation
+      );
+
+      if (!purchaseResult.success) {
+        return { success: false, error: purchaseResult.error };
       }
 
       // Order number from TellABot API
@@ -67,12 +68,20 @@ class SMSService {
         expiresAt.setMinutes(expiresAt.getMinutes() + 15); // 15 minutes for one-time
       }
 
+      // Get user profile for order details
+      const userProfile = await firestoreService.getUserProfile(userId);
+      if (!userProfile) {
+        // Refund the purchase since we can't create the order
+        await balanceManager.processRefund(userId, finalPrice, 'SMS Order Creation Failed');
+        return { success: false, error: 'User profile not found' };
+      }
+
       // Create SMS order in Firestore
       const smsOrder: Omit<SMSOrder, 'id' | 'createdAt' | 'updatedAt'> = {
         userId,
         userEmail: userProfile.email,
-        username: userProfile.username,
-        orderType: request.type,
+        username: userProfile.username || userProfile.displayName || userProfile.email.split('@')[0] || 'User',
+        orderType: request.type === 'rental' ? 'long-term' : 'one-time',
         service: request.service,
         mdn: orderResponse.number,
         externalId: orderResponse.id,
@@ -81,24 +90,11 @@ class SMSService {
         basePrice: parseFloat(serviceWithPricing.price),
         markup: finalPrice - parseFloat(serviceWithPricing.price),
         expiresAt: expiresAt,
-        duration: request.rentalDuration,
-        smsMessages: []
+        duration: request.rentalDuration, // Will be filtered out if undefined
+        smsMessages: [] // Initialize as empty array instead of undefined
       };
 
       const orderId = await firestoreService.createSMSOrder(smsOrder);
-
-      // Deduct balance
-      const newBalance = userProfile.balance - finalPrice;
-      await firestoreService.updateUserBalance(userId, newBalance);
-
-      // Add transaction record
-      await firestoreService.addBalanceTransaction({
-        userId,
-        type: 'purchase',
-        amount: -finalPrice,
-        description: `SMS Number: ${request.service} (${request.country}) - ${orderResponse.number}`,
-        balanceAfter: newBalance
-      });
 
       // Create SMS number object for session
       const smsNumber: SMSNumber = {
@@ -228,9 +224,54 @@ class SMSService {
             }
           }
         }
+      } else {
+        // Check if order has expired
+        const order = await firestoreService.getSMSOrder(orderId);
+        if (order && order.status === 'active') {
+          const now = new Date();
+          const expiresAt = new Date(order.expiresAt);
+          
+          if (now > expiresAt) {
+            // Order has expired, cancel it and refund user
+            await this.handleExpiredOrder(order);
+          }
+        }
       }
     } catch (error) {
       console.error('Error checking messages:', error);
+    }
+  }
+
+  // Handle expired orders
+  private async handleExpiredOrder(order: SMSOrder): Promise<void> {
+    try {
+      // Cancel with TellABot API
+      await tellaBotAPI.cancelNumber(order.externalId);
+      
+      // Update order status
+      await firestoreService.updateSMSOrder(order.id, { 
+        status: 'expired',
+        updatedAt: new Date()
+      });
+
+      // Stop polling
+      this.stopPolling(order.id);
+
+      // Remove from session
+      smsSessionService.removeActiveNumber(order.id);
+
+      // Refund user (80% of the price for expired orders)
+      const refundAmount = order.price * 0.8;
+      await balanceManager.processRefund(
+        order.userId,
+        refundAmount,
+        `SMS Order Expired - Auto Refund (${order.service})`,
+        order.id
+      );
+
+      console.log(`📞 Auto-cancelled expired SMS order ${order.id} and refunded $${refundAmount.toFixed(2)}`);
+    } catch (error) {
+      console.error('Error handling expired order:', error);
     }
   }
 
@@ -298,20 +339,13 @@ class SMSService {
 
       // Refund if cancellation was successful
       if (cancelled) {
-        const userProfile = await firestoreService.getUserProfile(userId);
-        if (userProfile) {
-          const refundAmount = order.price * 0.8; // 80% refund
-          const newBalance = userProfile.balance + refundAmount;
-          
-          await firestoreService.updateUserBalance(userId, newBalance);
-          await firestoreService.addBalanceTransaction({
-            userId,
-            type: 'refund',
-            amount: refundAmount,
-            description: `SMS Order Cancellation Refund - ${order.service}`,
-            balanceAfter: newBalance
-          });
-        }
+        const refundAmount = order.price * 0.8; // 80% refund
+        await balanceManager.processRefund(
+          userId,
+          refundAmount,
+          `SMS Order Cancellation Refund - ${order.service}`,
+          orderId
+        );
       }
 
       return { success: true };
@@ -345,10 +379,16 @@ class SMSService {
       const dailyRate = order.price / (order.duration || 30);
       const extensionCost = dailyRate * additionalDays;
 
-      // Check user balance
-      const userProfile = await firestoreService.getUserProfile(userId);
-      if (!userProfile || userProfile.balance < extensionCost) {
-        return { success: false, error: 'Insufficient balance' };
+      // Process purchase using balance manager
+      const purchaseResult = await balanceManager.processPurchase(
+        userId,
+        extensionCost,
+        `SMS Rental Extension - ${additionalDays} days`,
+        orderId
+      );
+
+      if (!purchaseResult.success) {
+        return { success: false, error: purchaseResult.error };
       }
 
       // Try to extend with TellABot API
@@ -365,20 +405,15 @@ class SMSService {
           updatedAt: new Date()
         });
 
-        // Deduct balance
-        const newBalance = userProfile.balance - extensionCost;
-        await firestoreService.updateUserBalance(userId, newBalance);
-        
-        await firestoreService.addBalanceTransaction({
-          userId,
-          type: 'purchase',
-          amount: -extensionCost,
-          description: `SMS Rental Extension - ${additionalDays} days`,
-          balanceAfter: newBalance
-        });
-
         return { success: true };
       } else {
+        // Refund the purchase since extension failed
+        await balanceManager.processRefund(
+          userId,
+          extensionCost,
+          'SMS Extension Failed - Refund',
+          orderId
+        );
         return { success: false, error: 'Failed to extend rental with provider' };
       }
 

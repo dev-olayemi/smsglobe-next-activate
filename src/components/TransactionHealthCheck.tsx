@@ -3,66 +3,71 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Loader2, Shield, AlertTriangle, CheckCircle, RefreshCw } from "lucide-react";
+import { Shield, AlertTriangle, CheckCircle, RefreshCw, Calendar } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
-import { checkUserTransactionHealth, autoFixUserBalance, TransactionHealthReport } from "@/lib/transaction-monitor";
+import { formatCurrency } from "@/lib/currency";
 import { toast } from "sonner";
 
 export const TransactionHealthCheck = () => {
-  const { user } = useAuth();
-  const [loading, setLoading] = useState(false);
+  const { user, profile, verifyBalance, fixBalance } = useAuth();
+  const [checking, setChecking] = useState(false);
   const [fixing, setFixing] = useState(false);
-  const [healthReport, setHealthReport] = useState<TransactionHealthReport | null>(null);
+  const [healthData, setHealthData] = useState<{
+    isValid: boolean;
+    discrepancy: number;
+    lastCheck?: Date;
+  } | null>(null);
 
   const runHealthCheck = async () => {
-    if (!user) {
-      toast.error("Please log in to run health check");
-      return;
-    }
+    if (!user) return;
 
-    setLoading(true);
+    setChecking(true);
     try {
-      console.log("🔍 Running transaction health check...");
-      const report = await checkUserTransactionHealth(user.uid);
-      setHealthReport(report);
-      
-      if (report.isHealthy) {
-        toast.success("Transaction health check passed!");
+      const result = await verifyBalance();
+      setHealthData({
+        isValid: result.isValid,
+        discrepancy: result.discrepancy,
+        lastCheck: new Date()
+      });
+
+      if (result.isValid) {
+        toast.success("Balance verification passed!");
       } else {
-        toast.warning(`Health check found ${report.issues.length} issue(s)`);
+        toast.warning(`Balance discrepancy detected: $${result.discrepancy.toFixed(2)}`);
       }
     } catch (error) {
       console.error("Health check failed:", error);
-      toast.error("Failed to run health check");
+      toast.error("Health check failed");
     } finally {
-      setLoading(false);
+      setChecking(false);
     }
   };
 
-  const autoFix = async () => {
-    if (!user || !healthReport) return;
+  const autoFixIssues = async () => {
+    if (!user) return;
 
     setFixing(true);
     try {
-      console.log("🔧 Running auto-fix...");
-      const result = await autoFixUserBalance(user.uid);
+      const result = await fixBalance();
       
-      if (result.fixed) {
-        toast.success(`Balance corrected: $${result.oldBalance.toFixed(2)} → $${result.newBalance.toFixed(2)}`);
-        // Re-run health check to verify fix
+      if (result.success) {
+        toast.success("Balance issues fixed successfully!");
+        // Re-run health check
         await runHealthCheck();
-      } else if (result.error) {
-        toast.error(`Auto-fix failed: ${result.error}`);
       } else {
-        toast.info("No fixes needed - balance is already correct");
+        toast.error(result.error || "Failed to fix balance issues");
       }
     } catch (error) {
       console.error("Auto-fix failed:", error);
-      toast.error("Failed to auto-fix balance");
+      toast.error("Auto-fix failed");
     } finally {
       setFixing(false);
     }
   };
+
+  if (!user || !profile) {
+    return null;
+  }
 
   return (
     <Card>
@@ -78,133 +83,96 @@ export const TransactionHealthCheck = () => {
       <CardContent className="space-y-4">
         <div className="flex gap-2">
           <Button 
-            onClick={runHealthCheck} 
-            disabled={loading || !user}
-            variant="outline"
+            variant="outline" 
+            onClick={runHealthCheck}
+            disabled={checking}
+            className="flex-1"
           >
-            {loading ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Checking...
-              </>
+            {checking ? (
+              <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
             ) : (
-              <>
-                <RefreshCw className="mr-2 h-4 w-4" />
-                Run Health Check
-              </>
+              <RefreshCw className="h-4 w-4 mr-2" />
             )}
+            Run Health Check
           </Button>
           
-          {healthReport && !healthReport.isHealthy && (
+          {healthData && !healthData.isValid && (
             <Button 
-              onClick={autoFix} 
+              onClick={autoFixIssues}
               disabled={fixing}
-              variant="default"
+              className="flex-1"
             >
               {fixing ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Fixing...
-                </>
+                <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
               ) : (
-                "Auto-Fix Issues"
+                <CheckCircle className="h-4 w-4 mr-2" />
               )}
+              Auto-Fix Issues
             </Button>
           )}
         </div>
 
-        {healthReport && (
-          <div className="space-y-4">
-            {/* Health Status */}
+        {healthData && (
+          <div className="space-y-3">
             <div className="flex items-center gap-2">
-              {healthReport.isHealthy ? (
+              {healthData.isValid ? (
                 <>
-                  <CheckCircle className="h-5 w-5 text-green-500" />
-                  <Badge variant="default" className="bg-green-500">Healthy</Badge>
+                  <CheckCircle className="h-4 w-4 text-green-500" />
+                  <Badge variant="secondary" className="bg-green-500 text-white">
+                    All Good
+                  </Badge>
                 </>
               ) : (
                 <>
-                  <AlertTriangle className="h-5 w-5 text-yellow-500" />
-                  <Badge variant="destructive">Issues Found</Badge>
+                  <AlertTriangle className="h-4 w-4 text-yellow-500" />
+                  <Badge variant="destructive">
+                    Issues Found
+                  </Badge>
                 </>
               )}
             </div>
 
-            {/* Balance Information */}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-4 text-sm">
               <div>
-                <p className="text-sm text-muted-foreground">Current Balance</p>
-                <p className="text-lg font-semibold">${healthReport.currentBalance.toFixed(2)}</p>
+                <span className="text-muted-foreground">Current Balance</span>
+                <p className="font-bold text-lg">{formatCurrency(profile.balance || 0, 'USD')}</p>
               </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Calculated Balance</p>
-                <p className="text-lg font-semibold">${healthReport.calculatedBalance.toFixed(2)}</p>
-              </div>
+              {!healthData.isValid && (
+                <div>
+                  <span className="text-muted-foreground">Discrepancy</span>
+                  <p className="font-bold text-lg text-red-600">
+                    {formatCurrency(healthData.discrepancy, 'USD')}
+                  </p>
+                </div>
+              )}
             </div>
 
-            {/* Discrepancy Alert */}
-            {healthReport.discrepancy > 0.01 && (
+            {!healthData.isValid && (
               <Alert>
                 <AlertTriangle className="h-4 w-4" />
                 <AlertDescription>
-                  Balance discrepancy detected: ${healthReport.discrepancy.toFixed(2)}
+                  <strong>Balance discrepancy detected:</strong> ${healthData.discrepancy.toFixed(2)}
                   <br />
                   Your profile balance doesn't match your transaction history.
                 </AlertDescription>
               </Alert>
             )}
 
-            {/* Transaction Stats */}
-            <div className="grid grid-cols-2 gap-4 text-sm">
-              <div>
-                <p className="text-muted-foreground">Total Transactions</p>
-                <p className="font-medium">{healthReport.transactionCount}</p>
+            {healthData.lastCheck && (
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <Calendar className="h-3 w-3" />
+                Last checked: {healthData.lastCheck.toLocaleString()}
               </div>
-              <div>
-                <p className="text-muted-foreground">Last Transaction</p>
-                <p className="font-medium">
-                  {healthReport.lastTransactionDate 
-                    ? healthReport.lastTransactionDate.toLocaleDateString()
-                    : 'None'
-                  }
-                </p>
-              </div>
+            )}
+
+            <div className="text-xs text-muted-foreground space-y-1">
+              <p><strong>Recommendations:</strong></p>
+              <ul className="list-disc list-inside space-y-1">
+                <li>Click "Auto-Fix Issues" to correct your balance</li>
+                <li>Contact support if issues persist after auto-fix</li>
+                <li>Run health checks regularly to catch issues early</li>
+              </ul>
             </div>
-
-            {/* Issues List */}
-            {healthReport.issues.length > 0 && (
-              <div>
-                <p className="text-sm font-medium text-muted-foreground mb-2">Issues Found:</p>
-                <div className="space-y-1">
-                  {healthReport.issues.map((issue, index) => (
-                    <Alert key={index} variant="destructive">
-                      <AlertDescription className="text-sm">{issue}</AlertDescription>
-                    </Alert>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Recommendations */}
-            {!healthReport.isHealthy && (
-              <div className="bg-muted p-3 rounded-lg">
-                <p className="text-sm font-medium mb-1">Recommendations:</p>
-                <ul className="text-sm text-muted-foreground space-y-1">
-                  {healthReport.discrepancy > 0.01 && (
-                    <li>• Click "Auto-Fix Issues" to correct your balance</li>
-                  )}
-                  <li>• Contact support if issues persist after auto-fix</li>
-                  <li>• Run health checks regularly to catch issues early</li>
-                </ul>
-              </div>
-            )}
-          </div>
-        )}
-
-        {!healthReport && !loading && (
-          <div className="text-center py-8 text-muted-foreground">
-            <Shield className="h-12 w-12 mx-auto mb-2 opacity-50" />
-            <p>Click "Run Health Check" to verify your account integrity</p>
           </div>
         )}
       </CardContent>
