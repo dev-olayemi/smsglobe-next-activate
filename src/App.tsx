@@ -16,6 +16,7 @@ import Receipt from "./pages/Receipt";
 import NotFound from "./pages/NotFound";
 import Admin from "./pages/Admin";
 import Esim from "./pages/Esim";
+import { ESimRefill } from "./pages/ESimRefill";
 import ProductDetail from "./pages/ProductDetail";
 import Orders from "./pages/Orders";
 import TopUp from "./pages/TopUp";
@@ -57,6 +58,7 @@ const App = () => (
             <Route path="/admin/*" element={<AdminApp />} />
             <Route path="/admin-panel/*" element={<AdminApp />} />
             <Route path="/esim" element={<Esim />} />
+            <Route path="/esim-refill" element={<ESimRefill />} />
             <Route path="/esim-categories" element={<EsimCategories />} />
             <Route path="/esim-category/:category" element={<EsimCategoryProducts />} />
             <Route path="/vpn-and-proxy" element={<VpnAndProxy />} />

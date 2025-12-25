@@ -335,6 +335,131 @@ class TellABotAPI {
     return countriesData;
   }
 
+  // Get US states for location selection
+  async getUSStates(): Promise<any[]> {
+    // Simulate US states data
+    return [
+      { code: 'CA', name: 'California', areaCodes: ['213', '310', '323', '424', '626', '628', '650', '657', '661', '669', '707', '714', '747', '760', '805', '818', '831', '858', '909', '916', '925', '949', '951'] },
+      { code: 'NY', name: 'New York', areaCodes: ['212', '315', '347', '516', '518', '585', '607', '631', '646', '680', '716', '718', '845', '914', '917', '929', '934'] },
+      { code: 'TX', name: 'Texas', areaCodes: ['214', '254', '281', '325', '346', '361', '409', '430', '432', '469', '512', '713', '737', '806', '817', '832', '903', '915', '936', '940', '956', '972', '979'] },
+      { code: 'FL', name: 'Florida', areaCodes: ['239', '305', '321', '352', '386', '407', '561', '689', '727', '754', '772', '786', '813', '850', '863', '904', '941', '954'] }
+    ];
+  }
+
+  // Get area codes for a specific state
+  async getAreaCodesForState(stateCode: string): Promise<string[]> {
+    const states = await this.getUSStates();
+    const state = states.find(s => s.code === stateCode);
+    return state ? state.areaCodes : [];
+  }
+
+  // Validate state code
+  async isValidStateCode(stateCode: string): Promise<boolean> {
+    const states = await this.getUSStates();
+    return states.some(s => s.code === stateCode);
+  }
+
+  // Validate area code
+  async isValidAreaCode(areaCode: string): Promise<boolean> {
+    const states = await this.getUSStates();
+    return states.some(s => s.areaCodes.includes(areaCode));
+  }
+
+  // Get state for area code
+  async getStateForAreaCode(areaCode: string): Promise<string | null> {
+    const states = await this.getUSStates();
+    const state = states.find(s => s.areaCodes.includes(areaCode));
+    return state ? state.code : null;
+  }
+
+  // Request number with specific parameters
+  async requestNumber(service: string, options?: { state?: string; areaCode?: string; mdn?: string }): Promise<any> {
+    try {
+      const params: any = {
+        cmd: 'request',
+        service: service
+      };
+
+      if (options?.state) params.state = options.state;
+      if (options?.areaCode) params.areacode = options.areaCode;
+      if (options?.mdn) params.mdn = options.mdn;
+
+      const response = await this.makeRequest(params);
+      
+      if (response.status !== 'ok') {
+        throw new Error(typeof response.message === 'string' ? response.message : 'Failed to request number');
+      }
+      
+      return response.data || response.message;
+    } catch (error) {
+      console.error('Error requesting number:', error);
+      throw error;
+    }
+  }
+
+  // Rent number with specific parameters
+  async rentNumber(service: string, duration: number, options?: { state?: string; areaCode?: string; mdn?: string }): Promise<any> {
+    try {
+      const params: any = {
+        cmd: 'ltr_rent',
+        service: service,
+        duration: duration.toString()
+      };
+
+      if (options?.state) params.state = options.state;
+      if (options?.areaCode) params.areacode = options.areaCode;
+      if (options?.mdn) params.mdn = options.mdn;
+
+      const response = await this.makeRequest(params);
+      
+      if (response.status !== 'ok') {
+        throw new Error(typeof response.message === 'string' ? response.message : 'Failed to rent number');
+      }
+      
+      return response.data || response.message;
+    } catch (error) {
+      console.error('Error renting number:', error);
+      throw error;
+    }
+  }
+
+  // Read SMS messages
+  async readSMS(options: { id?: string; mdn?: string; service?: string }): Promise<any> {
+    try {
+      const params: any = { cmd: 'read_sms' };
+      
+      if (options.id) params.id = options.id;
+      if (options.mdn) params.mdn = options.mdn;
+      if (options.service) params.service = options.service;
+
+      const response = await this.makeRequest(params);
+      
+      if (response.status === 'error') {
+        return { messages: [] };
+      }
+      
+      return response.data || response.message || { messages: [] };
+    } catch (error) {
+      console.error('Error reading SMS:', error);
+      return { messages: [] };
+    }
+  }
+
+  // Reject number
+  async rejectNumber(numberId: string): Promise<boolean> {
+    try {
+      const response = await this.makeRequest({
+        cmd: 'reject',
+        id: numberId
+      });
+      
+      return response.status === 'ok';
+    } catch (error) {
+      console.error('Error rejecting number:', error);
+      return false;
+    }
+  }
+
   // Get balance
   async getBalance(): Promise<number> {
     try {

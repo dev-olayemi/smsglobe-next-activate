@@ -225,10 +225,10 @@ export const ActiveNumbers: React.FC<ActiveNumbersProps> = ({ numbers, onRefresh
                   (() => {
                     try {
                       let expireDate: Date;
-                      if (number.expiresAt && typeof number.expiresAt === 'object' && number.expiresAt.toDate) {
-                        expireDate = number.expiresAt.toDate();
-                      } else if (number.expiresAt && typeof number.expiresAt === 'object' && number.expiresAt.seconds) {
-                        expireDate = new Date(number.expiresAt.seconds * 1000);
+                      if (number.expiresAt && typeof number.expiresAt === 'object' && 'toDate' in number.expiresAt) {
+                        expireDate = (number.expiresAt as any).toDate();
+                      } else if (number.expiresAt && typeof number.expiresAt === 'object' && 'seconds' in number.expiresAt) {
+                        expireDate = new Date((number.expiresAt as any).seconds * 1000);
                       } else {
                         expireDate = new Date(number.expiresAt);
                       }
@@ -263,10 +263,10 @@ export const ActiveNumbers: React.FC<ActiveNumbersProps> = ({ numbers, onRefresh
                           {(() => {
                             try {
                               let messageDate: Date;
-                              if (message.receivedAt && typeof message.receivedAt === 'object' && message.receivedAt.toDate) {
-                                messageDate = message.receivedAt.toDate();
-                              } else if (message.receivedAt && typeof message.receivedAt === 'object' && message.receivedAt.seconds) {
-                                messageDate = new Date(message.receivedAt.seconds * 1000);
+                              if (message.receivedAt && typeof message.receivedAt === 'object' && 'toDate' in message.receivedAt) {
+                                messageDate = (message.receivedAt as any).toDate();
+                              } else if (message.receivedAt && typeof message.receivedAt === 'object' && 'seconds' in message.receivedAt) {
+                                messageDate = new Date((message.receivedAt as any).seconds * 1000);
                               } else {
                                 messageDate = new Date(message.receivedAt);
                               }

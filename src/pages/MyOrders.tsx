@@ -192,56 +192,73 @@ const MyOrders = () => {
   return (
     <div className="min-h-screen flex flex-col">
       <Header />
-      <main className="flex-1 container px-4 py-8">
-        <div className="max-w-6xl mx-auto">
+      <main className="flex-1 px-3 py-4">
+        <div className="max-w-4xl mx-auto">
           {/* Header */}
-          <div className="flex items-center justify-between mb-8">
-            <div>
-              <h1 className="text-3xl font-bold">My Gift Orders</h1>
-              <p className="text-muted-foreground">
-                Track and manage your gift deliveries
-              </p>
-            </div>
-            <div className="text-right">
-              <p className="text-sm text-muted-foreground">Account Balance</p>
-              <p className="text-2xl font-bold">
-                {formatCurrency(profile?.balance || 0, 'USD')}
-              </p>
+          <div className="mb-6">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div>
+                <h1 className="text-xl sm:text-2xl font-bold">My Gift Orders</h1>
+                <p className="text-sm text-muted-foreground">
+                  Track and manage your gift deliveries
+                </p>
+              </div>
+              <div className="p-3 bg-white rounded-lg shadow-sm border">
+                <p className="text-xs text-muted-foreground">Account Balance</p>
+                <p className="text-lg font-bold text-green-600">
+                  {formatCurrency(profile?.balance || 0, 'USD')}
+                </p>
+              </div>
             </div>
           </div>
 
           {/* Tabs */}
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="mb-6">
-            <TabsList className="grid w-full grid-cols-5">
-              <TabsTrigger value="all">
-                All Orders ({orders.length})
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="mb-4">
+            <TabsList className="grid w-full grid-cols-3 sm:grid-cols-5 h-auto">
+              <TabsTrigger value="all" className="text-xs py-2">
+                <div className="text-center">
+                  <div>All</div>
+                  <div className="text-xs opacity-70">({orders.length})</div>
+                </div>
               </TabsTrigger>
-              <TabsTrigger value="pending">
-                Pending ({filterOrders('pending').length})
+              <TabsTrigger value="pending" className="text-xs py-2">
+                <div className="text-center">
+                  <div>Pending</div>
+                  <div className="text-xs opacity-70">({filterOrders('pending').length})</div>
+                </div>
               </TabsTrigger>
-              <TabsTrigger value="active">
-                Active ({filterOrders('active').length})
+              <TabsTrigger value="active" className="text-xs py-2">
+                <div className="text-center">
+                  <div>Active</div>
+                  <div className="text-xs opacity-70">({filterOrders('active').length})</div>
+                </div>
               </TabsTrigger>
-              <TabsTrigger value="completed">
-                Completed ({filterOrders('completed').length})
+              <TabsTrigger value="completed" className="text-xs py-2 hidden sm:flex">
+                <div className="text-center">
+                  <div>Done</div>
+                  <div className="text-xs opacity-70">({filterOrders('completed').length})</div>
+                </div>
               </TabsTrigger>
-              <TabsTrigger value="cancelled">
-                Cancelled ({filterOrders('cancelled').length})
+              <TabsTrigger value="cancelled" className="text-xs py-2 hidden sm:flex">
+                <div className="text-center">
+                  <div>Cancelled</div>
+                  <div className="text-xs opacity-70">({filterOrders('cancelled').length})</div>
+                </div>
               </TabsTrigger>
             </TabsList>
 
-            <TabsContent value={activeTab} className="mt-6">
+            <TabsContent value={activeTab} className="mt-4">
               {loading ? (
-                <div className="space-y-4">
+                <div className="space-y-3">
                   {Array.from({ length: 3 }).map((_, i) => (
                     <Card key={i}>
-                      <CardContent className="pt-6">
-                        <div className="flex gap-4">
-                          <Skeleton className="h-20 w-20 rounded" />
+                      <CardContent className="p-4">
+                        <div className="flex gap-3">
+                          <Skeleton className="h-16 w-16 rounded" />
                           <div className="flex-1 space-y-2">
                             <Skeleton className="h-4 w-3/4" />
-                            <Skeleton className="h-4 w-1/2" />
-                            <Skeleton className="h-4 w-1/4" />
+                            <Skeleton className="h-3 w-1/2" />
+                            <Skeleton className="h-3 w-1/4" />
                           </div>
                         </div>
                       </CardContent>
@@ -249,41 +266,41 @@ const MyOrders = () => {
                   ))}
                 </div>
               ) : filteredOrders.length === 0 ? (
-                <div className="text-center py-12">
-                  <Gift className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
-                  <h3 className="text-lg font-semibold mb-2">
+                <div className="text-center py-8">
+                  <Gift className="h-12 w-12 mx-auto mb-3 text-muted-foreground" />
+                  <h3 className="text-base font-semibold mb-2">
                     {activeTab === 'all' ? 'No Orders Yet' : `No ${activeTab} Orders`}
                   </h3>
-                  <p className="text-muted-foreground mb-6">
+                  <p className="text-sm text-muted-foreground mb-4">
                     {activeTab === 'all' 
                       ? "You haven't placed any gift orders yet."
                       : `You don't have any ${activeTab} orders.`
                     }
                   </p>
                   {activeTab === 'all' && (
-                    <Button onClick={() => navigate("/gifts")}>
+                    <Button onClick={() => navigate("/gifts")} size="sm">
                       <Gift className="mr-2 h-4 w-4" />
                       Browse Gifts
                     </Button>
                   )}
                 </div>
               ) : (
-                <div className="space-y-4">
+                <div className="space-y-3">
                   {filteredOrders.map((order) => (
                     <Card key={order.id} className="hover:shadow-md transition-shadow">
-                      <CardContent className="pt-6">
-                        <div className="flex gap-4">
+                      <CardContent className="p-4">
+                        <div className="flex gap-3">
                           {/* Gift Image */}
                           <div className="flex-shrink-0">
                             {order.giftImages.length > 0 ? (
                               <img
                                 src={order.giftImages[0]}
                                 alt={order.giftTitle}
-                                className="w-20 h-20 object-cover rounded-lg"
+                                className="w-16 h-16 object-cover rounded-lg"
                               />
                             ) : (
-                              <div className="w-20 h-20 bg-muted rounded-lg flex items-center justify-center">
-                                <Gift className="h-8 w-8 text-muted-foreground" />
+                              <div className="w-16 h-16 bg-muted rounded-lg flex items-center justify-center">
+                                <Gift className="h-6 w-6 text-muted-foreground" />
                               </div>
                             )}
                           </div>
@@ -291,79 +308,75 @@ const MyOrders = () => {
                           {/* Order Details */}
                           <div className="flex-1 min-w-0">
                             <div className="flex items-start justify-between mb-2">
-                              <div>
-                                <h3 className="font-semibold text-lg truncate">
+                              <div className="min-w-0 flex-1">
+                                <h3 className="font-semibold text-sm truncate">
                                   {order.giftTitle}
                                 </h3>
-                                <p className="text-sm text-muted-foreground">
-                                  Order #{order.orderNumber}
+                                <p className="text-xs text-muted-foreground">
+                                  #{order.orderNumber}
                                 </p>
                               </div>
-                              <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-1 ml-2">
                                 {getStatusIcon(order.status)}
-                                <Badge className={getStatusColor(order.status)}>
+                                <Badge className={`${getStatusColor(order.status)} text-xs px-2 py-1`}>
                                   {getStatusText(order.status)}
                                 </Badge>
                               </div>
                             </div>
 
-                            <div className="grid md:grid-cols-3 gap-4 text-sm">
+                            <div className="space-y-2 text-xs">
                               {/* Recipient */}
                               <div className="flex items-center gap-2">
-                                <MapPin className="h-4 w-4 text-muted-foreground" />
-                                <div>
-                                  <p className="font-medium">{order.recipientName}</p>
-                                  <p className="text-muted-foreground">
+                                <MapPin className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+                                <div className="min-w-0">
+                                  <p className="font-medium truncate">{order.recipientName}</p>
+                                  <p className="text-muted-foreground truncate">
                                     {order.deliveryAddress.city}, {order.deliveryAddress.countryName}
                                   </p>
                                 </div>
                               </div>
 
-                              {/* Date */}
-                              <div className="flex items-center gap-2">
-                                <Calendar className="h-4 w-4 text-muted-foreground" />
-                                <div>
-                                  <p className="font-medium">
+                              {/* Date & Amount */}
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                  <Calendar className="h-3 w-3 text-muted-foreground" />
+                                  <span className="text-muted-foreground">
                                     {order.createdAt 
                                       ? format(order.createdAt, "MMM dd, yyyy")
                                       : "Date not available"
                                     }
-                                  </p>
-                                  <p className="text-muted-foreground">Order placed</p>
+                                  </span>
                                 </div>
-                              </div>
-
-                              {/* Amount */}
-                              <div className="flex items-center gap-2">
-                                <Package className="h-4 w-4 text-muted-foreground" />
-                                <div>
-                                  <p className="font-medium">
+                                <div className="flex items-center gap-1">
+                                  <span className="font-medium">
                                     {formatCurrency(order.totalAmount, 'USD')}
-                                  </p>
-                                  <p className="text-muted-foreground">
-                                    Qty: {order.quantity}
-                                  </p>
+                                  </span>
+                                  <span className="text-muted-foreground">
+                                    (Qty: {order.quantity})
+                                  </span>
                                 </div>
                               </div>
                             </div>
 
                             {/* Actions */}
-                            <div className="flex gap-2 mt-4">
+                            <div className="flex flex-wrap gap-2 mt-3">
                               <Button
                                 variant="outline"
                                 size="sm"
                                 onClick={() => handleViewOrder(order)}
+                                className="text-xs h-7"
                               >
-                                <Eye className="mr-2 h-3 w-3" />
-                                View Details
+                                <Eye className="mr-1 h-3 w-3" />
+                                View
                               </Button>
                               
                               {order.status === 'pending_payment' && (
                                 <Button
                                   size="sm"
                                   onClick={() => handleViewOrder(order)}
+                                  className="text-xs h-7"
                                 >
-                                  Complete Payment
+                                  Pay Now
                                 </Button>
                               )}
                               
@@ -372,14 +385,15 @@ const MyOrders = () => {
                                   variant="outline"
                                   size="sm"
                                   asChild
+                                  className="text-xs h-7"
                                 >
                                   <a 
                                     href={order.courierTrackingUrl} 
                                     target="_blank" 
                                     rel="noopener noreferrer"
                                   >
-                                    <ExternalLink className="mr-2 h-3 w-3" />
-                                    Track Package
+                                    <ExternalLink className="mr-1 h-3 w-3" />
+                                    Track
                                   </a>
                                 </Button>
                               )}

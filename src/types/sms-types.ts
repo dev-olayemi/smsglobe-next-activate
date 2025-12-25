@@ -5,6 +5,12 @@ export interface Country {
   cities: string[];
 }
 
+export interface USState {
+  code: string;
+  name: string;
+  areaCodes: string[];
+}
+
 export interface Service {
   name: string;
   price: string;
@@ -35,6 +41,11 @@ export interface SMSNumber {
   messages: SMSMessage[];
   type: 'one-time' | 'rental';
   rentalDuration?: number; // in days for rental
+  state?: string;
+  areaCode?: string;
+  markup?: number;
+  carrier?: string;
+  tillExpiration?: number;
 }
 
 export interface SMSMessage {
@@ -66,6 +77,10 @@ export interface NumberRequest {
   country: string;
   type: 'one-time' | 'rental';
   rentalDuration?: number;
+  state?: string;
+  areaCode?: string;
+  mdn?: string;
+  markup?: number;
 }
 
 export interface TellABotResponse<T = any> {

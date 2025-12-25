@@ -15,7 +15,7 @@ import {
   ChevronDown,
   ChevronUp
 } from 'lucide-react';
-import { SMSOrder } from '@/types/sms-types';
+import { SMSOrder } from '@/lib/firestore-service';
 import { smsService } from '@/services/sms-service';
 
 interface OrderHistoryProps {

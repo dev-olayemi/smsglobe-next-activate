@@ -13,11 +13,12 @@ import { SettingsManagement } from './pages/SettingsManagement';
 import { ReportsAnalytics } from './pages/ReportsAnalytics';
 import { AdminProfile } from './pages/AdminProfile';
 import { SMSManagement } from './pages/SMSManagement';
+import { ESimRefillManagement } from './pages/ESimRefillManagement';
 import { AdminSidebar } from './components/AdminSidebar';
 import { AdminHeader } from './components/AdminHeader';
 import { AdminFooter } from './components/AdminFooter';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Loader2, LayoutDashboard, Users, Package, ShoppingCart, Gift, CreditCard, Settings, BarChart3, MessageSquare } from 'lucide-react';
+import { Loader2, LayoutDashboard, Users, Package, ShoppingCart, Gift, CreditCard, Settings, BarChart3, MessageSquare, Smartphone } from 'lucide-react';
 import { useState } from 'react';
 
 
@@ -56,6 +57,11 @@ const navigationItems = [
     title: 'SMS Management',
     href: '/admin/sms-management',
     icon: MessageSquare,
+  },
+  {
+    title: 'eSIM Refills',
+    href: '/admin/esim-refills',
+    icon: Smartphone,
   },
   {
     title: 'Reports',
@@ -158,6 +164,7 @@ function AdminRoutes() {
           <Route path="/gifts" element={<GiftsManagement />} />
           <Route path="/transactions" element={<TransactionsManagement />} />
           <Route path="/sms-management" element={<SMSManagement />} />
+          <Route path="/esim-refills" element={<ESimRefillManagement />} />
           <Route path="/settings" element={<SettingsManagement />} />
           <Route path="/reports" element={<ReportsAnalytics />} />
           <Route path="/profile" element={<AdminProfile />} />

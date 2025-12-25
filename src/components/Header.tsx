@@ -53,6 +53,7 @@ export const Header = () => {
     { to: "/transactions", label: "Transactions", icon: Receipt },
     { to: "/vpn-and-proxy", label: "Proxy", icon: Shield },
     { to: "/esim", label: "eSIMs", icon: CreditCard },
+    { to: "/esim-refill", label: "eSIM Refill", icon: CreditCard },
     { to: "/rdp", label: "RDP", icon: Monitor },
     { to: "/gifts", label: "Send Gifts", icon: Gift },
     { to: "/profile", label: "Profile", icon: User },
@@ -171,6 +172,9 @@ export const Header = () => {
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
                     <Link to="/my-orders">My Gift Orders</Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link to="/esim-refill">eSIM Refill</Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
                     <Link to="/transactions">Transactions</Link>

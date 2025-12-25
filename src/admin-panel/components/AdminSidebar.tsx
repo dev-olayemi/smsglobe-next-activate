@@ -12,6 +12,7 @@ import {
   ChevronLeft,
   ChevronRight,
   MessageSquare,
+  Smartphone,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -56,6 +57,11 @@ const navigationItems = [
     title: 'SMS Management',
     href: '/admin/sms-management',
     icon: MessageSquare,
+  },
+  {
+    title: 'eSIM Refills',
+    href: '/admin/esim-refills',
+    icon: Smartphone,
   },
   {
     title: 'Reports',

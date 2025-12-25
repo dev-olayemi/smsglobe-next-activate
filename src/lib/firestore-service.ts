@@ -16,6 +16,7 @@ import {
 } from "firebase/firestore";
 import { db } from "./firebase";
 import { validatePurchaseRequest, validateTransaction, validateProductOrder, cleanFirestoreData } from "./transaction-validator";
+import { SMSMessageRecord } from "@/types/sms-types";
 
 // User Profile
 export interface UserProfile {

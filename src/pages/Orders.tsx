@@ -108,11 +108,11 @@ const Orders = () => {
   }
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="min-h-screen flex flex-col bg-gray-50">
       <Header />
-      <main className="flex-1 container px-4 py-8">
+      <main className="flex-1 container px-3 sm:px-4 py-4 sm:py-8">
         <div className="max-w-6xl mx-auto space-y-4 sm:space-y-6">
-          <div className="px-2 sm:px-0">
+          <div>
             <h1 className="text-xl sm:text-2xl md:text-3xl font-bold mb-2">My Orders</h1>
             <p className="text-sm sm:text-base text-muted-foreground">
               Track your eSIM, VPN, Proxy, and RDP orders
@@ -120,40 +120,55 @@ const Orders = () => {
           </div>
 
           <Tabs defaultValue="pending" className="space-y-4 sm:space-y-6">
-            <div className="px-2 sm:px-0">
-              <TabsList className="grid w-full max-w-full sm:max-w-md grid-cols-3 h-auto">
-                <TabsTrigger value="pending" className="text-xs sm:text-sm py-2 px-1 sm:px-3">
-                  <span className="hidden sm:inline">Pending ({pendingOrders.length})</span>
-                  <span className="sm:hidden">Pending<br />({pendingOrders.length})</span>
+            <div className="w-full">
+              <TabsList className="grid w-full grid-cols-3 h-auto bg-white shadow-sm">
+                <TabsTrigger value="pending" className="text-xs sm:text-sm py-3 px-2 sm:px-4 data-[state=active]:bg-blue-50 data-[state=active]:text-blue-700">
+                  <div className="flex flex-col items-center gap-1">
+                    <Clock className="h-4 w-4" />
+                    <span>Pending</span>
+                    <Badge variant="secondary" className="text-xs">{pendingOrders.length}</Badge>
+                  </div>
                 </TabsTrigger>
-                <TabsTrigger value="completed" className="text-xs sm:text-sm py-2 px-1 sm:px-3">
-                  <span className="hidden sm:inline">Completed ({completedOrders.length})</span>
-                  <span className="sm:hidden">Done<br />({completedOrders.length})</span>
+                <TabsTrigger value="completed" className="text-xs sm:text-sm py-3 px-2 sm:px-4 data-[state=active]:bg-green-50 data-[state=active]:text-green-700">
+                  <div className="flex flex-col items-center gap-1">
+                    <CheckCircle className="h-4 w-4" />
+                    <span>Completed</span>
+                    <Badge variant="secondary" className="text-xs">{completedOrders.length}</Badge>
+                  </div>
                 </TabsTrigger>
-                <TabsTrigger value="all" className="text-xs sm:text-sm py-2 px-1 sm:px-3">
-                  <span className="hidden sm:inline">All ({orders.length})</span>
-                  <span className="sm:hidden">All<br />({orders.length})</span>
+                <TabsTrigger value="all" className="text-xs sm:text-sm py-3 px-2 sm:px-4 data-[state=active]:bg-gray-50 data-[state=active]:text-gray-700">
+                  <div className="flex flex-col items-center gap-1">
+                    <Package className="h-4 w-4" />
+                    <span>All Orders</span>
+                    <Badge variant="secondary" className="text-xs">{orders.length}</Badge>
+                  </div>
                 </TabsTrigger>
               </TabsList>
             </div>
 
             {/* Pending Orders */}
-            <TabsContent value="pending" className="space-y-3 sm:space-y-4 px-2 sm:px-0">
+            <TabsContent value="pending" className="space-y-3 sm:space-y-4">
               {pendingOrders.length === 0 ? (
-                <Card className="mx-0">
+                <Card className="border-0 shadow-sm">
                   <CardContent className="py-8 sm:py-12 text-center px-4">
-                    <Package className="h-8 w-8 sm:h-12 sm:w-12 mx-auto mb-3 sm:mb-4 text-muted-foreground" />
-                    <h3 className="font-semibold mb-2 text-sm sm:text-base">No Pending Orders</h3>
-                    <p className="text-xs sm:text-sm text-muted-foreground mb-3 sm:mb-4">
-                      You don't have any pending orders at the moment.
-                    </p>
-                    <Button onClick={() => navigate("/marketplace")} size="sm" className="text-xs sm:text-sm">
-                      Browse Products
-                    </Button>
+                    <div className="flex flex-col items-center space-y-4">
+                      <div className="p-4 bg-blue-50 rounded-full">
+                        <Package className="h-8 w-8 text-blue-600" />
+                      </div>
+                      <div className="space-y-2">
+                        <h3 className="font-semibold text-base sm:text-lg">No Pending Orders</h3>
+                        <p className="text-sm text-muted-foreground max-w-sm">
+                          You don't have any pending orders at the moment. Browse our marketplace to get started.
+                        </p>
+                      </div>
+                      <Button onClick={() => navigate("/marketplace")} className="mt-4">
+                        Browse Products
+                      </Button>
+                    </div>
                   </CardContent>
                 </Card>
               ) : (
-                <div className="grid gap-3 sm:gap-4">
+                <div className="space-y-3">
                   {pendingOrders.map((order) => (
                     <OrderCard key={order.id} order={order} onViewDetails={setSelectedOrder} />
                   ))}
@@ -162,19 +177,25 @@ const Orders = () => {
             </TabsContent>
 
             {/* Completed Orders */}
-            <TabsContent value="completed" className="space-y-3 sm:space-y-4 px-2 sm:px-0">
+            <TabsContent value="completed" className="space-y-3 sm:space-y-4">
               {completedOrders.length === 0 ? (
-                <Card className="mx-0">
+                <Card className="border-0 shadow-sm">
                   <CardContent className="py-8 sm:py-12 text-center px-4">
-                    <CheckCircle className="h-8 w-8 sm:h-12 sm:w-12 mx-auto mb-3 sm:mb-4 text-muted-foreground" />
-                    <h3 className="font-semibold mb-2 text-sm sm:text-base">No Completed Orders</h3>
-                    <p className="text-xs sm:text-sm text-muted-foreground">
-                      Your completed orders will appear here.
-                    </p>
+                    <div className="flex flex-col items-center space-y-4">
+                      <div className="p-4 bg-green-50 rounded-full">
+                        <CheckCircle className="h-8 w-8 text-green-600" />
+                      </div>
+                      <div className="space-y-2">
+                        <h3 className="font-semibold text-base sm:text-lg">No Completed Orders</h3>
+                        <p className="text-sm text-muted-foreground max-w-sm">
+                          Your completed orders will appear here once they're fulfilled.
+                        </p>
+                      </div>
+                    </div>
                   </CardContent>
                 </Card>
               ) : (
-                <div className="grid gap-3 sm:gap-4">
+                <div className="space-y-3">
                   {completedOrders.map((order) => (
                     <OrderCard key={order.id} order={order} onViewDetails={setSelectedOrder} />
                   ))}
@@ -183,22 +204,28 @@ const Orders = () => {
             </TabsContent>
 
             {/* All Orders */}
-            <TabsContent value="all" className="space-y-3 sm:space-y-4 px-2 sm:px-0">
+            <TabsContent value="all" className="space-y-3 sm:space-y-4">
               {orders.length === 0 ? (
-                <Card className="mx-0">
+                <Card className="border-0 shadow-sm">
                   <CardContent className="py-8 sm:py-12 text-center px-4">
-                    <Package className="h-8 w-8 sm:h-12 sm:w-12 mx-auto mb-3 sm:mb-4 text-muted-foreground" />
-                    <h3 className="font-semibold mb-2 text-sm sm:text-base">No Orders Yet</h3>
-                    <p className="text-xs sm:text-sm text-muted-foreground mb-3 sm:mb-4">
-                      Start by browsing our marketplace for eSIMs, VPNs, Proxies, and more.
-                    </p>
-                    <Button onClick={() => navigate("/marketplace")} size="sm" className="text-xs sm:text-sm">
-                      Browse Products
-                    </Button>
+                    <div className="flex flex-col items-center space-y-4">
+                      <div className="p-4 bg-gray-50 rounded-full">
+                        <Package className="h-8 w-8 text-gray-600" />
+                      </div>
+                      <div className="space-y-2">
+                        <h3 className="font-semibold text-base sm:text-lg">No Orders Yet</h3>
+                        <p className="text-sm text-muted-foreground max-w-sm">
+                          Start by browsing our marketplace for eSIMs, VPNs, Proxies, and more.
+                        </p>
+                      </div>
+                      <Button onClick={() => navigate("/marketplace")} className="mt-4">
+                        Browse Products
+                      </Button>
+                    </div>
                   </CardContent>
                 </Card>
               ) : (
-                <div className="grid gap-3 sm:gap-4">
+                <div className="space-y-3">
                   {orders.map((order) => (
                     <OrderCard key={order.id} order={order} onViewDetails={setSelectedOrder} />
                   ))}
@@ -227,52 +254,54 @@ const OrderCard = ({ order, onViewDetails }: { order: ProductOrder; onViewDetail
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'completed':
-        return <CheckCircle className="h-3 w-3 sm:h-4 sm:w-4 text-green-500" />;
+        return <CheckCircle className="h-4 w-4 text-green-500" />;
       case 'processing':
-        return <RefreshCw className="h-3 w-3 sm:h-4 sm:w-4 text-blue-500" />;
+        return <RefreshCw className="h-4 w-4 text-blue-500" />;
       case 'cancelled':
-        return <XCircle className="h-3 w-3 sm:h-4 sm:w-4 text-red-500" />;
+        return <XCircle className="h-4 w-4 text-red-500" />;
       case 'refunded':
-        return <RefreshCw className="h-3 w-3 sm:h-4 sm:w-4 text-orange-500" />;
+        return <RefreshCw className="h-4 w-4 text-orange-500" />;
       default:
-        return <Clock className="h-3 w-3 sm:h-4 sm:w-4 text-yellow-500" />;
+        return <Clock className="h-4 w-4 text-yellow-500" />;
     }
   };
 
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'completed':
-        return 'bg-green-500';
+        return 'bg-green-500 text-white';
       case 'processing':
-        return 'bg-blue-500';
+        return 'bg-blue-500 text-white';
       case 'cancelled':
-        return 'bg-red-500';
+        return 'bg-red-500 text-white';
       case 'refunded':
-        return 'bg-orange-500';
+        return 'bg-orange-500 text-white';
       default:
-        return 'bg-yellow-500';
+        return 'bg-yellow-500 text-white';
     }
   };
 
   return (
-    <Card className="hover:shadow-md transition-shadow mx-0">
-      <CardContent className="p-3 sm:p-4 md:p-6">
-        <div className="flex flex-col gap-3">
-          {/* Header Row */}
-          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2">
+    <Card className="hover:shadow-md transition-all duration-200 border-0 shadow-sm bg-white">
+      <CardContent className="p-4">
+        <div className="space-y-3">
+          {/* Header */}
+          <div className="flex items-start justify-between gap-3">
             <div className="flex-1 min-w-0">
-              <div className="flex flex-col sm:flex-row sm:items-center gap-2 mb-2">
-                <h3 className="font-semibold text-sm sm:text-base truncate">{order.productName}</h3>
-                <Badge variant="secondary" className={`${getStatusColor(order.status)} text-white w-fit text-xs`}>
+              <div className="flex items-center gap-2 mb-2">
+                <h3 className="font-semibold text-base truncate">{order.productName}</h3>
+                <Badge className={`${getStatusColor(order.status)} text-xs px-2 py-1`}>
                   {order.status}
                 </Badge>
               </div>
               
-              <div className="flex flex-wrap items-center gap-1 sm:gap-2 text-xs text-muted-foreground">
-                <span>#{order.id.slice(-8)}</span>
-                <span className="hidden sm:inline">•</span>
-                <span className="font-medium text-green-600">{formatCurrency(order.price, 'USD')}</span>
-                <span className="hidden sm:inline">•</span>
+              <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+                <span className="font-mono text-xs bg-gray-100 px-2 py-1 rounded">
+                  #{order.id.slice(-8)}
+                </span>
+                <span className="font-semibold text-green-600">
+                  {formatCurrency(order.price, 'USD')}
+                </span>
                 <span>
                   {order.createdAt?.toDate 
                     ? format(order.createdAt.toDate(), "MMM dd, yyyy")
@@ -282,36 +311,34 @@ const OrderCard = ({ order, onViewDetails }: { order: ProductOrder; onViewDetail
               </div>
             </div>
 
-            <div className="flex items-center gap-2 justify-end sm:justify-start">
-              {getStatusIcon(order.status)}
-              <Button 
-                variant="outline" 
-                size="sm"
-                onClick={() => onViewDetails(order)}
-                className="text-xs h-7 px-2 sm:h-8 sm:px-3"
-              >
-                <Eye className="h-3 w-3 mr-1" />
-                <span className="hidden sm:inline">View</span>
-                <span className="sm:hidden">View</span>
-              </Button>
-            </div>
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => onViewDetails(order)}
+              className="flex-shrink-0"
+            >
+              <Eye className="h-4 w-4 mr-2" />
+              View
+            </Button>
           </div>
 
-          {/* Details Row */}
+          {/* Details */}
           {order.requestDetails && (
-            <div className="text-xs text-muted-foreground space-y-1 pt-2 border-t border-gray-100">
-              {order.requestDetails.location && (
-                <div className="flex items-center gap-1">
-                  <MapPin className="h-3 w-3 flex-shrink-0" />
-                  <span className="truncate">{order.requestDetails.location}</span>
-                </div>
-              )}
-              {order.requestDetails.duration && (
-                <div className="flex items-center gap-1">
-                  <Calendar className="h-3 w-3 flex-shrink-0" />
-                  <span className="truncate">{order.requestDetails.duration}</span>
-                </div>
-              )}
+            <div className="pt-3 border-t border-gray-100">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
+                {order.requestDetails.location && (
+                  <div className="flex items-center gap-2">
+                    <MapPin className="h-4 w-4 text-gray-400 flex-shrink-0" />
+                    <span className="truncate">{order.requestDetails.location}</span>
+                  </div>
+                )}
+                {order.requestDetails.duration && (
+                  <div className="flex items-center gap-2">
+                    <Calendar className="h-4 w-4 text-gray-400 flex-shrink-0" />
+                    <span className="truncate">{order.requestDetails.duration}</span>
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>
