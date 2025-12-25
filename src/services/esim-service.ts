@@ -390,7 +390,9 @@ class ESimService {
       }
 
       if (request.refillType === 'validity' || request.refillType === 'both') {
-        const currentExpiry = esimOrder.expiresAt instanceof Date ? esimOrder.expiresAt : esimOrder.expiresAt.toDate();
+        const currentExpiry = esimOrder.expiresAt instanceof Date 
+          ? esimOrder.expiresAt 
+          : (esimOrder.expiresAt as any).toDate ? (esimOrder.expiresAt as any).toDate() : new Date(esimOrder.expiresAt);
         const additionalDays = request.refillPlan.validityDays || 0;
         const newExpiry = new Date(currentExpiry);
         newExpiry.setDate(newExpiry.getDate() + additionalDays);
