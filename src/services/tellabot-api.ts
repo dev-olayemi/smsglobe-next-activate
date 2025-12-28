@@ -1,6 +1,23 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-const TELLABOT_BASE_URL = "/api/tellabot"; // ← Uses Vite proxy (no CORS, secure)
+// Environment-based API URL configuration
+const getApiBaseUrl = () => {
+  // Check if we're in development with proxy available
+  if (import.meta.env.DEV) {
+    return "/api/tellabot"; // Use Vite proxy in development
+  }
+  
+  // In production, check if we have a custom proxy endpoint
+  const customProxy = import.meta.env.VITE_TELLABOT_PROXY_URL;
+  if (customProxy) {
+    return customProxy; // Use custom backend proxy
+  }
+  
+  // Fallback to direct API calls (may have CORS issues)
+  return "https://www.tellabot.com/sims/api_command.php";
+};
+
+const TELLABOT_BASE_URL = getApiBaseUrl();
 
 // In production, use env variables. Hardcoded for testing only.
 const TELLABOT_USERNAME = import.meta.env.VITE_TELL_A_BOT_USERNAME;
@@ -48,7 +65,21 @@ async function callTellabot<T>(cmd: string, params: Record<string, any> = {}): P
 
     if (!response.ok) {
       const text = await response.text();
+      console.error(`API Error - Status: ${response.status}, URL: ${url}, Response: ${text}`);
+      
+      // Check if we got HTML instead of JSON (common in production errors)
+      if (text.includes('<!DOCTYPE') || text.includes('<html')) {
+        throw new Error(`Server returned HTML instead of JSON. This usually means the API endpoint is not available. Status: ${response.status}`);
+      }
+      
       throw new Error(`HTTP ${response.status}: ${text || response.statusText}`);
+    }
+
+    const contentType = response.headers.get('content-type');
+    if (!contentType || !contentType.includes('application/json')) {
+      const text = await response.text();
+      console.error(`Non-JSON response - Content-Type: ${contentType}, Response: ${text}`);
+      throw new Error(`Expected JSON response but got ${contentType || 'unknown content type'}`);
     }
 
     const json: ApiResponse = await response.json();
@@ -65,6 +96,13 @@ async function callTellabot<T>(cmd: string, params: Record<string, any> = {}): P
     if (err.name === "AbortError") {
       throw new Error("Request timed out. Please check your connection and try again.");
     }
+
+    // Log the full error for debugging
+    console.error(`Tellabot API Error:`, {
+      url,
+      error: err.message,
+      stack: err.stack
+    });
 
     throw err;
   }
