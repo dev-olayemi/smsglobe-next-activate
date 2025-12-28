@@ -4,12 +4,11 @@ import {
   SMSNumber,
   NumberRequest,
   Service,
-  SMSOrderStatus,
 } from '../types/sms-types';
 import { tellabotApi } from './tellabot-api'; // ← Correct import name
 import { smsPricingService } from './sms-pricing-service';
 import { smsSessionService } from './sms-session-service';
-import { firestoreService, SMSOrder } from '../lib/firestore-service';
+import { firestoreService, SMSOrder, SMSOrderStatus } from '../lib/firestore-service';
 import { balanceManager } from '../lib/balance-manager';
 
 class SMSService {
@@ -142,10 +141,10 @@ class SMSService {
         externalId: isLongTerm ? orderResponse.id.toString() : orderResponse.id,
         status: this.mapTellaBotStatus(
           isLongTerm ? 'online' : (orderResponse.status || 'Awaiting MDN')
-        ) as SMSOrderStatus,
+        ),
         price: finalPrice,
-        basePrice: isLongTerm ? serviceWithPricing.ltr_price || serviceWithPricing.price : serviceWithPricing.price,
-        markup: finalPrice - (isLongTerm ? serviceWithPricing.ltr_price || 0 : serviceWithPricing.price),
+        basePrice: parseFloat(isLongTerm ? (serviceWithPricing.ltr_price || serviceWithPricing.price).toString() : serviceWithPricing.price.toString()),
+        markup: finalPrice - parseFloat((isLongTerm ? serviceWithPricing.ltr_price || serviceWithPricing.price : serviceWithPricing.price).toString()),
         expiresAt,
         duration: request.rentalDuration,
         smsMessages: [],
@@ -161,7 +160,7 @@ class SMSService {
         countryCode: '+1',
         service: request.service,
         price: finalPrice,
-        status: smsOrder.status,
+        status: this.mapSMSNumberStatus(smsOrder.status),
         createdAt: new Date(),
         expiresAt,
         messages: [],
@@ -188,18 +187,33 @@ class SMSService {
     }
   }
 
-  private mapTellaBotStatus(tellaBotStatus: string): string {
-    const map: Record<string, string> = {
-      'Awaiting MDN': 'waiting',
-      'Reserved': 'active',
+  private mapTellaBotStatus(tellaBotStatus: string): SMSOrderStatus {
+    const map: Record<string, SMSOrderStatus> = {
+      'Awaiting MDN': 'awaiting_mdn',
+      'Reserved': 'reserved',
       'Completed': 'completed',
-      'Rejected': 'cancelled',
-      'Timed Out': 'expired',
+      'Rejected': 'rejected',
+      'Timed Out': 'timed_out',
       'online': 'active',
-      'offline': 'inactive',
-      'awaiting mdn': 'waiting',
+      'offline': 'expired',
+      'awaiting mdn': 'awaiting_mdn',
     };
-    return map[tellaBotStatus] || 'waiting';
+    return map[tellaBotStatus] || 'pending';
+  }
+
+  private mapSMSNumberStatus(smsOrderStatus: SMSOrderStatus): 'active' | 'waiting' | 'completed' | 'cancelled' {
+    const map: Record<SMSOrderStatus, 'active' | 'waiting' | 'completed' | 'cancelled'> = {
+      'pending': 'waiting',
+      'awaiting_mdn': 'waiting',
+      'reserved': 'active',
+      'active': 'active',
+      'completed': 'completed',
+      'rejected': 'cancelled',
+      'timed_out': 'cancelled',
+      'cancelled': 'cancelled',
+      'expired': 'cancelled',
+    };
+    return map[smsOrderStatus] || 'waiting';
   }
 
   private startPolling(orderId: string, externalId: string, userId: string): void {
@@ -225,7 +239,7 @@ class SMSService {
 
           await firestoreService.updateSMSOrder(orderId, {
             smsMessages: formattedMessages,
-            status: 'completed' as SMSOrderStatus,
+            status: 'completed',
           });
 
           this.stopPolling(orderId); // Stop after receiving SMS
@@ -235,7 +249,7 @@ class SMSService {
         const status = await tellabotApi.getRequestStatus(externalId);
         if (status.status === 'Timed Out' || status.status === 'Rejected') {
           await firestoreService.updateSMSOrder(orderId, {
-            status: this.mapTellaBotStatus(status.status) as SMSOrderStatus,
+            status: this.mapTellaBotStatus(status.status),
           });
           this.stopPolling(orderId);
         }
@@ -278,11 +292,11 @@ class SMSService {
         await tellabotApi.rejectRequest(order.externalId);
       }
 
-      await firestoreService.updateSMSOrder(orderId, { status: 'cancelled' as SMSOrderStatus });
+      await firestoreService.updateSMSOrder(orderId, { status: 'cancelled' });
       this.stopPolling(orderId);
 
       // Refund only if not used
-      if (order.status === 'waiting' || !order.smsMessages.length) {
+      if (order.status === 'pending' || order.status === 'awaiting_mdn' || !order.smsMessages.length) {
         await balanceManager.processRefund(userId, order.price, 'SMS Order Cancelled');
       }
 

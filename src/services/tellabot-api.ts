@@ -7,14 +7,8 @@ const getApiBaseUrl = () => {
     return "/api/tellabot"; // Use Vite proxy in development
   }
   
-  // In production, check if we have a custom proxy endpoint
-  const customProxy = import.meta.env.VITE_TELLABOT_PROXY_URL;
-  if (customProxy) {
-    return customProxy; // Use custom backend proxy
-  }
-  
-  // Fallback to direct API calls (may have CORS issues)
-  return "https://www.tellabot.com/sims/api_command.php";
+  // In production, use Vercel serverless function
+  return "/api/tellabot"; // This will hit our Vercel API route
 };
 
 const TELLABOT_BASE_URL = getApiBaseUrl();
@@ -48,6 +42,13 @@ async function callTellabot<T>(cmd: string, params: Record<string, any> = {}): P
   });
 
   const url = `${TELLABOT_BASE_URL}?${urlParams.toString()}`;
+
+  // Debug logging (remove in production)
+  console.log(`🔄 Tellabot API Call: ${cmd}`, {
+    baseUrl: TELLABOT_BASE_URL,
+    isDev: import.meta.env.DEV,
+    isProd: import.meta.env.PROD
+  });
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
@@ -89,6 +90,7 @@ async function callTellabot<T>(cmd: string, params: Record<string, any> = {}): P
       throw new Error(msg);
     }
 
+    console.log(`✅ Tellabot API Success: ${cmd}`);
     return json.message as T;
   } catch (err: any) {
     clearTimeout(timeoutId);
@@ -98,8 +100,9 @@ async function callTellabot<T>(cmd: string, params: Record<string, any> = {}): P
     }
 
     // Log the full error for debugging
-    console.error(`Tellabot API Error:`, {
-      url,
+    console.error(`❌ Tellabot API Error:`, {
+      cmd,
+      url: url.replace(/api_key=[^&]+/, 'api_key=***'), // Hide API key in logs
       error: err.message,
       stack: err.stack
     });
