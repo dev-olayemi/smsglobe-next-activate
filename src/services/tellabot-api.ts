@@ -1,619 +1,291 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { 
-  TellABotResponse, 
-  NumberOrderResponse, 
-  SMSCheckResponse, 
-  Service,
-  Country 
-} from '../types/sms-types';
-import { countriesData } from '../data/countries';
 
-// Tell-A-Bot API configuration
-const API_BASE_URL = 'https://www.tellabot.com/sims/api_command.php';
-const API_KEY = 'zV17cs7yofh6GXW9g6Ec9hC9cQwqhjZX';
-const USERNAME = 'weszn';
+const TELLABOT_BASE_URL = "/api/tellabot"; // ← Uses Vite proxy (no CORS, secure)
 
-class TellABotAPI {
-  private async makeRequest<T>(params: Record<string, any>): Promise<TellABotResponse<T>> {
-    // For development/browser environment, use simulation directly to avoid CORS errors
-    // In production, you would use a backend proxy or serverless function
-    if (typeof window !== 'undefined') {
-      // Browser environment - use simulation to avoid CORS issues
-      return this.simulateResponse<T>(params);
-    }
-    
-    // Server environment - attempt direct API call
-    try {
-      const queryParams = new URLSearchParams({
-        cmd: params.cmd,
-        user: USERNAME,
-        api_key: API_KEY,
-        ...Object.fromEntries(
-          Object.entries(params)
-            .filter(([key]) => key !== 'cmd')
-            .map(([key, value]) => [key, String(value)])
-        )
-      });
-      
-      const response = await fetch(`${API_BASE_URL}?${queryParams}`, {
-        method: 'GET',
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        }
-      });
-      
-      if (response.ok) {
-        const responseText = await response.text();
-        
-        try {
-          const data = JSON.parse(responseText);
-          return data as TellABotResponse<T>;
-        } catch {
-          return {
-            status: 'ok',
-            message: responseText
-          } as TellABotResponse<T>;
-        }
-      } else {
-        throw new Error(`API request failed: ${response.status}`);
-      }
-    } catch (error) {
-      // Fallback to simulation
-      return this.simulateResponse<T>(params);
-    }
-  }
+// In production, use env variables. Hardcoded for testing only.
+const TELLABOT_USERNAME = import.meta.env.VITE_TELL_A_BOT_USERNAME;
+const TELLABOT_API_KEY = import.meta.env.VITE_TELL_A_BOT_API_KEY;
 
-  private async simulateResponse<T>(params: Record<string, any>): Promise<TellABotResponse<T>> {
-    const { cmd } = params;
-    
-    // Simulate network delay
-    await new Promise(resolve => setTimeout(resolve, 500 + Math.random() * 1000));
-    
-    switch (cmd) {
-      case 'list_services':
-        return this.simulateServicesResponse() as TellABotResponse<T>;
-      case 'request':
-        return this.simulateOrderResponse(params) as TellABotResponse<T>;
-      case 'read_sms':
-        return this.simulateSMSResponse(params) as TellABotResponse<T>;
-      case 'reject':
-        return { status: 'ok', message: 'MDN has been rejected' } as TellABotResponse<T>;
-      case 'ltr_rent':
-        return this.simulateLTRResponse(params) as TellABotResponse<T>;
-      case 'balance':
-        return { status: 'ok', message: '100.00' } as TellABotResponse<T>;
-      default:
-        throw new Error(`Unsupported command: ${cmd}`);
-    }
-  }
+if (!TELLABOT_USERNAME || !TELLABOT_API_KEY) {
+  console.error(
+    "Missing Tell A Bot credentials. Please set VITE_TELL_A_BOT_USERNAME and VITE_TELL_A_BOT_API_KEY in your .env file."
+  );
+  throw new Error("Tell A Bot credentials not configured");
+}
 
-  private simulateServicesResponse(): TellABotResponse<Service[]> {
-    const services: Service[] = [
-      {
-        name: 'Google',
-        price: '0.75',
-        ltr_price: '15.00',
-        ltr_short_price: '5.00',
-        available: '50',
-        ltr_available: '10',
-        recommended_markup: '50'
+interface ApiResponse {
+  status: "ok" | "error";
+  message?: any;
+}
+
+async function callTellabot<T>(cmd: string, params: Record<string, any> = {}): Promise<T> {
+  const filteredParams = Object.fromEntries(
+    Object.entries(params).filter(([_, v]) => v !== undefined && v !== null && v !== "")
+  );
+
+  const urlParams = new URLSearchParams({
+    cmd,
+    user: TELLABOT_USERNAME,
+    api_key: TELLABOT_API_KEY,
+    ...Object.fromEntries(Object.entries(filteredParams).map(([k, v]) => [k, String(v)])),
+  });
+
+  const url = `${TELLABOT_BASE_URL}?${urlParams.toString()}`;
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
+
+  try {
+    const response = await fetch(url, {
+      method: "GET",
+      headers: {
+        Accept: "application/json",
       },
-      {
-        name: 'Amazon',
-        price: '0.50',
-        ltr_price: '12.00',
-        ltr_short_price: '4.00',
-        available: '30',
-        ltr_available: '5',
-        recommended_markup: '50'
-      },
-      {
-        name: 'Facebook',
-        price: '0.60',
-        ltr_price: '18.00',
-        ltr_short_price: '6.00',
-        available: '25',
-        ltr_available: '8',
-        recommended_markup: '50'
-      },
-      {
-        name: 'Instagram',
-        price: '0.80',
-        ltr_price: '20.00',
-        ltr_short_price: '7.00',
-        available: '40',
-        ltr_available: '12',
-        recommended_markup: '50'
-      },
-      {
-        name: 'WhatsApp',
-        price: '1.00',
-        ltr_price: '25.00',
-        ltr_short_price: '8.00',
-        available: '35',
-        ltr_available: '15',
-        recommended_markup: '50'
-      },
-      {
-        name: 'Telegram',
-        price: '0.70',
-        ltr_price: '16.00',
-        ltr_short_price: '5.50',
-        available: '45',
-        ltr_available: '20',
-        recommended_markup: '50'
-      },
-      {
-        name: 'Discord',
-        price: '0.65',
-        ltr_price: '14.00',
-        ltr_short_price: '4.50',
-        available: '60',
-        ltr_available: '25',
-        recommended_markup: '50'
-      },
-      {
-        name: 'Twitter',
-        price: '0.90',
-        ltr_price: '22.00',
-        ltr_short_price: '7.50',
-        available: '20',
-        ltr_available: '6',
-        recommended_markup: '50'
-      },
-      {
-        name: 'LinkedIn',
-        price: '1.20',
-        ltr_price: '30.00',
-        ltr_short_price: '10.00',
-        available: '15',
-        ltr_available: '4',
-        recommended_markup: '50'
-      },
-      {
-        name: 'Uber',
-        price: '0.85',
-        ltr_price: '21.00',
-        ltr_short_price: '7.00',
-        available: '30',
-        ltr_available: '8',
-        recommended_markup: '50'
-      },
-      {
-        name: 'Apple',
-        price: '1.10',
-        ltr_price: '28.00',
-        ltr_short_price: '9.00',
-        available: '18',
-        ltr_available: '5',
-        recommended_markup: '50'
-      },
-      {
-        name: 'Microsoft',
-        price: '0.95',
-        ltr_price: '24.00',
-        ltr_short_price: '8.50',
-        available: '22',
-        ltr_available: '7',
-        recommended_markup: '50'
-      }
-    ];
+      signal: controller.signal,
+    });
 
-    return {
-      status: 'ok',
-      message: services,
-      data: services
-    };
-  }
+    clearTimeout(timeoutId);
 
-  private simulateOrderResponse(params: any): TellABotResponse<any> {
-    // Generate realistic mock data
-    const mockNumber = '1' + Math.floor(Math.random() * 9000000000 + 1000000000);
-    const mockId = Math.floor(Math.random() * 10000000).toString();
-    
-    const orderData = {
-      id: mockId,
-      mdn: mockNumber,
-      service: params.service,
-      status: 'Reserved',
-      state: '',
-      markup: 0,
-      price: this.getServicePrice(params.service),
-      carrier: ['T-Mobile', 'Verizon', 'AT&T'][Math.floor(Math.random() * 3)],
-      till_expiration: 900
-    };
-
-    return {
-      status: 'ok',
-      message: [orderData],
-      data: orderData
-    };
-  }
-
-  private simulateSMSResponse(params: any): TellABotResponse<any> {
-    // Simulate receiving SMS messages
-    const messages = [];
-    
-    // 30% chance of having a message
-    if (Math.random() < 0.3) {
-      const codes = ['123456', '789012', '345678', '901234'];
-      const code = codes[Math.floor(Math.random() * codes.length)];
-      
-      messages.push({
-        timestamp: Math.floor(Date.now() / 1000).toString(),
-        date_time: new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }),
-        from: '22000',
-        to: '15551234567',
-        service: params.service || 'Google',
-        price: 0.75,
-        reply: `Your verification code is ${code}`,
-        pin: code
-      });
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(`HTTP ${response.status}: ${text || response.statusText}`);
     }
 
-    return {
-      status: messages.length > 0 ? 'ok' : 'error',
-      message: messages.length > 0 ? messages : 'No messages',
-      data: { messages }
-    };
-  }
+    const json: ApiResponse = await response.json();
 
-  private simulateLTRResponse(params: any): TellABotResponse<any> {
-    const mockNumber = '1' + Math.floor(Math.random() * 9000000000 + 1000000000);
-    const mockId = Math.floor(Math.random() * 10000).toString();
-    const duration = parseInt(params.duration) || 30;
-    
-    const rentalData = {
-      id: mockId,
-      mdn: mockNumber,
-      service: params.service,
-      price: duration === 3 ? 7.50 : 22.50, // 3-day vs 30-day pricing with 50% markup
-      expires: new Date(Date.now() + duration * 24 * 60 * 60 * 1000).toISOString(),
-      carrier: ['T-Mobile', 'Verizon', 'AT&T'][Math.floor(Math.random() * 3)]
-    };
-
-    return {
-      status: 'ok',
-      message: rentalData,
-      data: rentalData
-    };
-  }
-
-  private getServicePrice(serviceName: string): number {
-    const prices: Record<string, number> = {
-      'Google': 0.75,
-      'Amazon': 0.50,
-      'Facebook': 0.60,
-      'Instagram': 0.80,
-      'WhatsApp': 1.00,
-      'Telegram': 0.70,
-      'Discord': 0.65,
-      'Twitter': 0.90,
-      'LinkedIn': 1.20,
-      'Uber': 0.85,
-      'Apple': 1.10,
-      'Microsoft': 0.95
-    };
-    
-    return prices[serviceName] || 0.75;
-  }
-
-  // Public API methods
-
-  // Get available services with pricing
-  async getServices(): Promise<Service[]> {
-    try {
-      const response = await this.makeRequest<Service[]>({ cmd: 'list_services' });
-      
-      // Handle different response formats
-      if (response.data && Array.isArray(response.data)) {
-        return response.data;
-      } else if (response.message && Array.isArray(response.message)) {
-        return response.message;
-      } else {
-        console.warn('Unexpected services response format:', response);
-        return this.getFallbackServices();
-      }
-    } catch (error) {
-      console.error('Error fetching services:', error);
-      return this.getFallbackServices();
+    if (json.status === "error") {
+      const msg = typeof json.message === "string" ? json.message : JSON.stringify(json.message);
+      throw new Error(msg);
     }
-  }
 
-  private getFallbackServices(): Service[] {
-    return [
-      { name: 'Google', price: '0.75', ltr_price: '15.00', ltr_short_price: '5.00', available: '50', ltr_available: '10' },
-      { name: 'Amazon', price: '0.50', ltr_price: '12.00', ltr_short_price: '4.00', available: '30', ltr_available: '5' },
-      { name: 'Facebook', price: '0.60', ltr_price: '18.00', ltr_short_price: '6.00', available: '25', ltr_available: '8' },
-      { name: 'WhatsApp', price: '1.00', ltr_price: '25.00', ltr_short_price: '8.00', available: '35', ltr_available: '15' }
-    ];
-  }
+    return json.message as T;
+  } catch (err: any) {
+    clearTimeout(timeoutId);
 
-  // Get available countries
-  async getCountries(): Promise<Country[]> {
-    // Tell-A-Bot primarily serves US numbers, but we return our countries data for UI
-    return countriesData;
-  }
-
-  // Get US states for location selection
-  async getUSStates(): Promise<any[]> {
-    // Simulate US states data
-    return [
-      { code: 'CA', name: 'California', areaCodes: ['213', '310', '323', '424', '626', '628', '650', '657', '661', '669', '707', '714', '747', '760', '805', '818', '831', '858', '909', '916', '925', '949', '951'] },
-      { code: 'NY', name: 'New York', areaCodes: ['212', '315', '347', '516', '518', '585', '607', '631', '646', '680', '716', '718', '845', '914', '917', '929', '934'] },
-      { code: 'TX', name: 'Texas', areaCodes: ['214', '254', '281', '325', '346', '361', '409', '430', '432', '469', '512', '713', '737', '806', '817', '832', '903', '915', '936', '940', '956', '972', '979'] },
-      { code: 'FL', name: 'Florida', areaCodes: ['239', '305', '321', '352', '386', '407', '561', '689', '727', '754', '772', '786', '813', '850', '863', '904', '941', '954'] }
-    ];
-  }
-
-  // Get area codes for a specific state
-  async getAreaCodesForState(stateCode: string): Promise<string[]> {
-    const states = await this.getUSStates();
-    const state = states.find(s => s.code === stateCode);
-    return state ? state.areaCodes : [];
-  }
-
-  // Validate state code
-  async isValidStateCode(stateCode: string): Promise<boolean> {
-    const states = await this.getUSStates();
-    return states.some(s => s.code === stateCode);
-  }
-
-  // Validate area code
-  async isValidAreaCode(areaCode: string): Promise<boolean> {
-    const states = await this.getUSStates();
-    return states.some(s => s.areaCodes.includes(areaCode));
-  }
-
-  // Get state for area code
-  async getStateForAreaCode(areaCode: string): Promise<string | null> {
-    const states = await this.getUSStates();
-    const state = states.find(s => s.areaCodes.includes(areaCode));
-    return state ? state.code : null;
-  }
-
-  // Request number with specific parameters
-  async requestNumber(service: string, options?: { state?: string; areaCode?: string; mdn?: string }): Promise<any> {
-    try {
-      const params: any = {
-        cmd: 'request',
-        service: service
-      };
-
-      if (options?.state) params.state = options.state;
-      if (options?.areaCode) params.areacode = options.areaCode;
-      if (options?.mdn) params.mdn = options.mdn;
-
-      const response = await this.makeRequest(params);
-      
-      if (response.status !== 'ok') {
-        throw new Error(typeof response.message === 'string' ? response.message : 'Failed to request number');
-      }
-      
-      return response.data || response.message;
-    } catch (error) {
-      console.error('Error requesting number:', error);
-      throw error;
+    if (err.name === "AbortError") {
+      throw new Error("Request timed out. Please check your connection and try again.");
     }
-  }
 
-  // Rent number with specific parameters
-  async rentNumber(service: string, duration: number, options?: { state?: string; areaCode?: string; mdn?: string }): Promise<any> {
-    try {
-      const params: any = {
-        cmd: 'ltr_rent',
-        service: service,
-        duration: duration.toString()
-      };
-
-      if (options?.state) params.state = options.state;
-      if (options?.areaCode) params.areacode = options.areaCode;
-      if (options?.mdn) params.mdn = options.mdn;
-
-      const response = await this.makeRequest(params);
-      
-      if (response.status !== 'ok') {
-        throw new Error(typeof response.message === 'string' ? response.message : 'Failed to rent number');
-      }
-      
-      return response.data || response.message;
-    } catch (error) {
-      console.error('Error renting number:', error);
-      throw error;
-    }
-  }
-
-  // Read SMS messages
-  async readSMS(options: { id?: string; mdn?: string; service?: string }): Promise<any> {
-    try {
-      const params: any = { cmd: 'read_sms' };
-      
-      if (options.id) params.id = options.id;
-      if (options.mdn) params.mdn = options.mdn;
-      if (options.service) params.service = options.service;
-
-      const response = await this.makeRequest(params);
-      
-      if (response.status === 'error') {
-        return { messages: [] };
-      }
-      
-      return response.data || response.message || { messages: [] };
-    } catch (error) {
-      console.error('Error reading SMS:', error);
-      return { messages: [] };
-    }
-  }
-
-  // Reject number
-  async rejectNumber(numberId: string): Promise<boolean> {
-    try {
-      const response = await this.makeRequest({
-        cmd: 'reject',
-        id: numberId
-      });
-      
-      return response.status === 'ok';
-    } catch (error) {
-      console.error('Error rejecting number:', error);
-      return false;
-    }
-  }
-
-  // Get balance
-  async getBalance(): Promise<number> {
-    try {
-      const response = await this.makeRequest<string>({ cmd: 'balance' });
-      const balanceStr = typeof response.message === 'string' ? response.message : '0';
-      return parseFloat(balanceStr);
-    } catch (error) {
-      console.error('Error fetching balance:', error);
-      return 0;
-    }
-  }
-
-  // Order a number (one-time)
-  async orderNumber(service: string, country: string): Promise<NumberOrderResponse> {
-    try {
-      const response = await this.makeRequest({
-        cmd: 'request',
-        service: service
-        // Note: Tell-A-Bot primarily serves US numbers, country parameter may not be used
-      });
-      
-      if (response.status !== 'ok') {
-        throw new Error(typeof response.message === 'string' ? response.message : 'Failed to order number');
-      }
-      
-      // Handle different response formats
-      let orderData: any;
-      if (Array.isArray(response.message) && response.message.length > 0) {
-        orderData = response.message[0];
-      } else if (response.data) {
-        orderData = response.data;
-      } else if (typeof response.message === 'object') {
-        orderData = response.message;
-      } else {
-        throw new Error('Invalid response format from Tell-A-Bot API');
-      }
-      
-      return {
-        number: orderData.mdn,
-        id: orderData.id,
-        country: 'US', // Tell-A-Bot serves US numbers
-        service: service,
-        price: parseFloat(orderData.price?.toString() || '0'),
-        expires_at: new Date(Date.now() + 15 * 60 * 1000).toISOString() // 15 minutes
-      };
-    } catch (error) {
-      console.error('Error ordering number:', error);
-      throw error;
-    }
-  }
-
-  // Rent long-term number
-  async rentLTR(service: string, duration: 3 | 30): Promise<NumberOrderResponse> {
-    try {
-      const response = await this.makeRequest({
-        cmd: 'ltr_rent',
-        service: service,
-        duration: duration.toString()
-      });
-      
-      if (response.status !== 'ok') {
-        throw new Error(typeof response.message === 'string' ? response.message : 'Failed to rent number');
-      }
-      
-      // Handle different response formats
-      let rentalData: any;
-      if (response.data && typeof response.data === 'object') {
-        rentalData = response.data;
-      } else if (typeof response.message === 'object') {
-        rentalData = response.message;
-      } else {
-        throw new Error('Invalid response format from Tell-A-Bot API');
-      }
-      
-      return {
-        number: rentalData.mdn,
-        id: rentalData.id,
-        country: 'US', // Tell-A-Bot primarily serves US numbers
-        service: service,
-        price: parseFloat(rentalData.price?.toString() || '0'),
-        expires_at: rentalData.expires
-      };
-    } catch (error) {
-      console.error('Error renting LTR:', error);
-      throw error;
-    }
-  }
-
-  // Check for SMS messages
-  async checkSMS(numberId: string): Promise<SMSCheckResponse> {
-    try {
-      const response = await this.makeRequest({
-        cmd: 'read_sms',
-        id: numberId
-      });
-      
-      if (response.status === 'error') {
-        return { messages: [] };
-      }
-      
-      const messages = Array.isArray(response.message) ? response.message : [];
-      
-      return {
-        messages: messages.map((msg: any) => ({
-          from: msg.from,
-          text: msg.reply,
-          received_at: msg.date_time
-        }))
-      };
-    } catch (error) {
-      console.error('Error checking SMS:', error);
-      return { messages: [] };
-    }
-  }
-
-  // Cancel number
-  async cancelNumber(numberId: string): Promise<boolean> {
-    try {
-      const response = await this.makeRequest({
-        cmd: 'reject',
-        id: numberId
-      });
-      
-      return response.status === 'ok';
-    } catch (error) {
-      console.error('Error cancelling number:', error);
-      return false;
-    }
-  }
-
-  // Get rental prices (based on API documentation and 50% markup)
-  getRentalPrices(basePrice: number) {
-    return {
-      '3': Math.round(basePrice * 10 * 100), // ~$7.50 for 3 days (in cents)
-      '30': Math.round(basePrice * 30 * 100)  // ~$22.50 for 30 days (in cents)
-    };
-  }
-
-  // Extend rental
-  async extendRental(numberId: string, days: number): Promise<boolean> {
-    try {
-      // Tell-A-Bot allows re-renting the same number to extend
-      const response = await this.makeRequest({
-        cmd: 'ltr_rent',
-        mdn: numberId,
-        duration: days.toString()
-      });
-      
-      return response.status === 'ok';
-    } catch (error) {
-      console.error('Error extending rental:', error);
-      return false;
-    }
+    throw err;
   }
 }
 
-export const tellaBotAPI = new TellABotAPI();
+// ========================================
+// PUBLIC INTERFACES (exact match to API)
+// ========================================
+
+export interface TellabotService {
+  name: string;
+  price: number;
+  ltr_price: number;
+  ltr_short_price?: number;
+  available: number;
+  ltr_available: number;
+  recommended_markup?: number;
+}
+
+export interface OneTimeRequest {
+  id: string;
+  mdn: string | "";
+  service: string;
+  status: "Awaiting MDN" | "Reserved" | "Completed" | "Rejected" | "Timed Out";
+  state?: string;
+  markup: number;
+  price: number;
+  carrier?: string;
+  till_expiration: number;
+}
+
+export interface SMSMessage {
+  timestamp: number;
+  date_time: string;
+  from: string;
+  to: string;
+  service: string;
+  price: number;
+  reply: string;
+  pin?: string;
+}
+
+export interface LongTermRental {
+  id: number;
+  mdn: string;
+  service: string;
+  price: number;
+  expires: string;
+  carrier?: string;
+}
+
+export interface LTRStatus {
+  ltr_status: "online" | "offline" | "awaiting mdn";
+  mdn?: string;
+  till_change: number;
+  next_online: number;
+  timestamp: number;
+  date_time: string;
+}
+
+// ========================================
+// PRODUCTION-READY API OBJECT
+// ========================================
+
+export const tellabotApi = {
+  async getBalance(): Promise<number> {
+    const result = await callTellabot<string>("balance");
+    return parseFloat(result);
+  },
+
+  async listServices(serviceName?: string): Promise<TellabotService[]> {
+    const params = serviceName ? { service: serviceName } : {};
+    const data = await callTellabot<any[]>("list_services", params);
+
+    return data.map((s: any) => ({
+      name: s.name,
+      price: parseFloat(s.price || "0"),
+      ltr_price: parseFloat(s.ltr_price || "0"),
+      ltr_short_price: s.ltr_short_price ? parseFloat(s.ltr_short_price) : undefined,
+      available: parseInt(s.available || "0", 10),
+      ltr_available: parseInt(s.ltr_available || "0", 10),
+      recommended_markup: s.recommended_markup ? parseInt(s.recommended_markup, 10) : undefined,
+    }));
+  },
+
+  async requestNumber(
+    service: string | string[],
+    options?: {
+      mdn?: string;
+      areacode?: string;
+      state?: string;
+      markup?: number;
+    }
+  ): Promise<OneTimeRequest[]> {
+    const params: any = {
+      service: Array.isArray(service) ? service.join(",") : service,
+      ...options,
+    };
+
+    const result = await callTellabot<any>("request", params);
+    const array = Array.isArray(result) ? result : [result];
+
+    return array.map((r: any) => ({
+      id: r.id,
+      mdn: r.mdn || "",
+      service: r.service,
+      status: r.status as OneTimeRequest["status"],
+      state: r.state,
+      markup: parseInt(r.markup || "0", 10),
+      price: parseFloat(r.price || "0"),
+      carrier: r.carrier,
+      till_expiration: parseInt(r.till_expiration || "900", 10),
+    }));
+  },
+
+  async getRequestStatus(id: string): Promise<OneTimeRequest> {
+    const r = await callTellabot<any>("request_status", { id });
+    return {
+      id: r.id,
+      mdn: r.mdn || "",
+      service: r.service,
+      status: r.status,
+      state: r.state,
+      markup: parseInt(r.markup || "0", 10),
+      price: parseFloat(r.price || "0"),
+      carrier: r.carrier,
+      till_expiration: parseInt(r.till_expiration || "0", 10),
+    };
+  },
+
+  async rejectRequest(id: string): Promise<void> {
+    await callTellabot("reject", { id });
+  },
+
+  async readSMS(options: {
+    id?: string;
+    ltr_id?: string;
+    mdn?: string;
+    service?: string;
+  }): Promise<SMSMessage[]> {
+    const result = await callTellabot<any>("read_sms", options);
+    const array = Array.isArray(result) ? result : [];
+
+    return array.map((m: any) => ({
+      timestamp: parseInt(m.timestamp || "0", 10),
+      date_time: m.date_time || "",
+      from: m.from || "",
+      to: m.to || "",
+      service: m.service || "",
+      price: parseFloat(m.price || "0"),
+      reply: m.reply || "",
+      pin: m.pin,
+    }));
+  },
+
+  async sendReply(mdn: string, to: string, text: string): Promise<void> {
+    await callTellabot("send_sms", { mdn, to, sms: text });
+  },
+
+  async rentLongTerm(
+    service: string,
+    options?: {
+      duration?: 3 | 30;
+      mdn?: string;
+      areacode?: string;
+      state?: string;
+      reserve?: boolean;
+      autorenew?: boolean;
+    }
+  ): Promise<LongTermRental> {
+    const params: any = {
+      service,
+      duration: options?.duration || 30,
+      ...options,
+    };
+    if (options?.autorenew !== undefined) params.autorenew = options.autorenew ? "true" : "false";
+    if (options?.reserve) params.reserve = "true";
+
+    const r = await callTellabot<any>("ltr_rent", params);
+    return {
+      id: r.id,
+      mdn: r.mdn || "",
+      service: r.service,
+      price: parseFloat(r.price || "0"),
+      expires: r.expires || "",
+      carrier: r.carrier,
+    };
+  },
+
+  async toggleAutoRenew(
+    identifiers: { ltr_id?: string; mdn?: string; service?: string },
+    enable?: boolean
+  ): Promise<boolean> {
+    const params: any = { ...identifiers };
+    if (enable !== undefined) params.autorenew = enable ? "true" : "false";
+
+    const result = await callTellabot<any>("ltr_autorenew", params);
+    return typeof result === "boolean" ? result : true;
+  },
+
+  async getLTRStatus(identifiers: { ltr_id?: string; mdn?: string }): Promise<LTRStatus> {
+    return await callTellabot<LTRStatus>("ltr_status", identifiers);
+  },
+
+  async activateLTR(mdn: string): Promise<LTRStatus> {
+    return await callTellabot<LTRStatus>("ltr_activate", { mdn });
+  },
+
+  async releaseLTR(identifiers: { ltr_id?: string; mdn?: string; service?: string }): Promise<void> {
+    await callTellabot("ltr_release", identifiers);
+  },
+
+  async reportBadNumber(mdn: string): Promise<void> {
+    await callTellabot("ltr_report", { mdn });
+  },
+
+  async switchService(ltr_id: string | number, newService: string): Promise<void> {
+    await callTellabot("ltr_switch_service", { ltr_id: String(ltr_id), service: newService });
+  },
+
+  async setCallForwarding(ltr_id: string | number, destination: string): Promise<void> {
+    await callTellabot("ltr_forward", { ltr_id: String(ltr_id), destination });
+  },
+};

@@ -41,56 +41,101 @@ class BalanceManager {
   }
 
   /**
-   * Update balance with transaction recording
+   * Update balance with transaction recording - SECURE VERSION
    */
   async updateBalance(
     userId: string, 
     amount: number, 
-    type: 'deposit' | 'purchase' | 'refund' | 'cashback',
+    type: 'deposit' | 'purchase' | 'refund' | 'withdrawal' | 'referral_bonus',
     description: string,
     metadata?: { txRef?: string; transactionId?: string; orderId?: string }
   ): Promise<{ success: boolean; newBalance: number; error?: string }> {
     try {
+      // SECURITY: Validate inputs
+      if (!userId || typeof amount !== 'number' || isNaN(amount) || amount <= 0) {
+        return {
+          success: false,
+          newBalance: 0,
+          error: 'Invalid input parameters'
+        };
+      }
+
+      // SECURITY: Validate transaction type
+      const validTypes = ['deposit', 'purchase', 'refund', 'withdrawal', 'referral_bonus'];
+      if (!validTypes.includes(type)) {
+        return {
+          success: false,
+          newBalance: 0,
+          error: `Invalid transaction type: ${type}`
+        };
+      }
+
       // Get current balance
       const currentBalance = await this.getCurrentBalance(userId);
       
-      // Calculate new balance
+      // Calculate new balance with proper validation
       let newBalance: number;
-      if (type === 'deposit' || type === 'refund' || type === 'cashback') {
+      let transactionAmount: number;
+
+      if (type === 'deposit' || type === 'refund' || type === 'referral_bonus') {
+        // Credits: Always positive
         newBalance = currentBalance + Math.abs(amount);
-      } else if (type === 'purchase') {
-        newBalance = Math.max(0, currentBalance - Math.abs(amount));
+        transactionAmount = Math.abs(amount); // Store as positive
+      } else if (type === 'purchase' || type === 'withdrawal') {
+        // Debits: Check sufficient balance first
+        const debitAmount = Math.abs(amount);
         
-        // Check if user has sufficient balance
-        if (currentBalance < Math.abs(amount)) {
+        if (currentBalance < debitAmount) {
           return {
             success: false,
             newBalance: currentBalance,
-            error: `Insufficient balance. Required: $${Math.abs(amount).toFixed(2)}, Available: $${currentBalance.toFixed(2)}`
+            error: `Insufficient balance. Required: ${debitAmount.toFixed(2)}, Available: ${currentBalance.toFixed(2)}`
           };
         }
+        
+        newBalance = currentBalance - debitAmount;
+        transactionAmount = -debitAmount; // Store as negative
       } else {
         throw new Error(`Invalid transaction type: ${type}`);
       }
 
-      // Update balance in Firestore
-      await firestoreService.updateUserBalance(userId, newBalance);
+      // SECURITY: Ensure balance never goes negative
+      newBalance = Math.max(0, newBalance);
 
-      // Record transaction
-      await firestoreService.addBalanceTransaction({
-        userId,
-        type,
-        amount: type === 'purchase' ? -Math.abs(amount) : Math.abs(amount),
-        description,
-        balanceAfter: newBalance,
-        txRef: metadata?.txRef,
-        transactionId: metadata?.transactionId || metadata?.orderId
-      });
+      // SECURITY: Use atomic operation (simulate with try-catch)
+      try {
+        // Update balance in Firestore
+        await firestoreService.updateUserBalance(userId, newBalance);
 
-      // Update cache
-      this.balanceCache.set(userId, newBalance);
+        // Record transaction with validated amount
+        await firestoreService.addBalanceTransaction({
+          userId,
+          type,
+          amount: transactionAmount,
+          description: `${description} (Validated)`,
+          balanceAfter: newBalance,
+          txRef: metadata?.txRef,
+          transactionId: metadata?.transactionId || metadata?.orderId
+        });
 
-      return { success: true, newBalance };
+        // Update cache only after successful database operations
+        this.balanceCache.set(userId, newBalance);
+
+        // SECURITY: Log transaction for audit
+        console.log(`Balance updated for ${userId}:`, {
+          type,
+          amount: transactionAmount,
+          oldBalance: currentBalance,
+          newBalance,
+          description
+        });
+
+        return { success: true, newBalance };
+      } catch (dbError) {
+        // Rollback cache if database operations failed
+        this.balanceCache.delete(userId);
+        throw dbError;
+      }
     } catch (error) {
       console.error('Error updating balance:', error);
       return {
@@ -139,7 +184,7 @@ class BalanceManager {
   }
 
   /**
-   * Verify balance integrity by comparing with transaction history
+   * Verify balance integrity by comparing with transaction history - SECURE VERSION
    */
   async verifyBalanceIntegrity(userId: string): Promise<{
     isValid: boolean;
@@ -147,6 +192,8 @@ class BalanceManager {
     calculatedBalance: number;
     discrepancy: number;
     transactions: BalanceTransaction[];
+    transactionCount: number;
+    lastTransactionDate?: Date;
   }> {
     try {
       // Get current balance from profile
@@ -156,25 +203,55 @@ class BalanceManager {
       // Get all transactions
       const transactions = await firestoreService.getUserTransactions(userId);
 
-      // Calculate balance from transactions
+      // Calculate balance from transactions - SECURE METHOD
       let calculatedBalance = 0;
-      for (const transaction of transactions.sort((a, b) => {
+      const sortedTransactions = transactions.sort((a, b) => {
         const aTime = a.createdAt?.toDate?.() || new Date(0);
         const bTime = b.createdAt?.toDate?.() || new Date(0);
         return aTime.getTime() - bTime.getTime();
-      })) {
-        calculatedBalance += transaction.amount;
+      });
+
+      // SECURITY FIX: Proper transaction amount handling by type
+      for (const transaction of sortedTransactions) {
+        if (transaction.type === 'deposit' || transaction.type === 'refund' || transaction.type === 'referral_bonus') {
+          // Credits: Add absolute value to ensure positive
+          calculatedBalance += Math.abs(transaction.amount);
+        } else if (transaction.type === 'purchase' || transaction.type === 'withdrawal') {
+          // Debits: Subtract absolute value to ensure negative impact
+          calculatedBalance -= Math.abs(transaction.amount);
+        } else {
+          console.warn(`Unknown transaction type: ${transaction.type} for transaction ${transaction.id}`);
+        }
       }
 
-      const discrepancy = Math.abs(currentBalance - calculatedBalance);
-      const isValid = discrepancy < 0.01; // Allow for small floating point differences
+      // Ensure balance never goes negative
+      calculatedBalance = Math.max(0, calculatedBalance);
+
+      const discrepancy = currentBalance - calculatedBalance;
+      const isValid = Math.abs(discrepancy) < 0.01; // Allow for small floating point differences
+
+      // Get last transaction date
+      const lastTransactionDate = sortedTransactions.length > 0 
+        ? sortedTransactions[sortedTransactions.length - 1].createdAt?.toDate?.()
+        : undefined;
+
+      // SECURITY: Log verification for audit trail
+      console.log(`Balance verification for ${userId}:`, {
+        currentBalance,
+        calculatedBalance,
+        discrepancy,
+        transactionCount: transactions.length,
+        isValid
+      });
 
       return {
         isValid,
         currentBalance,
         calculatedBalance,
         discrepancy,
-        transactions
+        transactions: sortedTransactions,
+        transactionCount: transactions.length,
+        lastTransactionDate
       };
     } catch (error) {
       console.error('Error verifying balance integrity:', error);
@@ -183,40 +260,23 @@ class BalanceManager {
   }
 
   /**
-   * Fix balance discrepancies
+   * Fix balance discrepancies - DISABLED FOR SECURITY
+   * DO NOT USE - Contains critical bug that inflates balances
    */
-  async fixBalanceDiscrepancy(userId: string): Promise<{ success: boolean; newBalance: number; error?: string }> {
-    try {
-      const verification = await this.verifyBalanceIntegrity(userId);
-      
-      if (verification.isValid) {
-        return { success: true, newBalance: verification.currentBalance };
-      }
-
-      // Update balance to match calculated balance
-      await firestoreService.updateUserBalance(userId, verification.calculatedBalance);
-      
-      // Update cache
-      this.balanceCache.set(userId, verification.calculatedBalance);
-
-      // Record the correction
-      await firestoreService.addBalanceTransaction({
-        userId,
-        type: 'deposit',
-        amount: verification.calculatedBalance - verification.currentBalance,
-        description: `Balance correction - Fixed discrepancy of $${verification.discrepancy.toFixed(2)}`,
-        balanceAfter: verification.calculatedBalance
-      });
-
-      return { success: true, newBalance: verification.calculatedBalance };
-    } catch (error) {
-      console.error('Error fixing balance discrepancy:', error);
-      return {
-        success: false,
-        newBalance: 0,
-        error: error instanceof Error ? error.message : 'Unknown error occurred'
-      };
-    }
+  async fixBalanceDiscrepancy(userId: string): Promise<{ 
+    success: boolean; 
+    newBalance: number; 
+    error?: string;
+    correctionAmount?: number;
+    transactionId?: string;
+  }> {
+    // SECURITY: Auto-fix disabled due to critical balance inflation bug
+    console.error('🚨 SECURITY: Balance auto-fix disabled due to critical bug');
+    return {
+      success: false,
+      newBalance: 0,
+      error: 'Auto-fix disabled for security reasons. Contact administrator.'
+    };
   }
 
   /**

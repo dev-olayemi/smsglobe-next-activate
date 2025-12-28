@@ -4,461 +4,532 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { 
-  Phone, 
-  MessageSquare, 
-  Clock, 
-  CheckCircle, 
-  XCircle, 
+import { Badge } from '@/components/ui/badge';
+import { toast } from 'sonner';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import {
+  Phone,
+  MessageSquare,
+  Clock,
+  CheckCircle,
   RefreshCw,
-  Globe,
   Zap,
   Shield,
-  Search
+  Search,
+  Timer,
+  Smartphone,
+  AlertCircle,
+  MapPin,
 } from 'lucide-react';
+
 import { useAuth } from '@/lib/auth-context';
-import { smsService } from '@/services/sms-service';
-import { smsSessionService } from '@/services/sms-session-service';
-import { flagService } from '@/services/flag-service';
-import { ServiceIcon } from '@/components/ServiceIcon';
-import { Service, Country, SMSNumber } from '@/types/sms-types';
-import { ActiveNumbers } from './ActiveNumbers';
+import { tellabotApi, TellabotService } from '@/services/tellabot-api';
+import { TellabotActiveNumbers } from './TellabotActiveNumbers';
 import { OrderHistory } from './OrderHistory';
-import { toast } from 'sonner';
+import { ServiceIcon } from '@/components/ServiceIcon';
+
+const US_STATES = [
+  { code: 'AL', name: 'Alabama' },
+  { code: 'AK', name: 'Alaska' },
+  { code: 'AZ', name: 'Arizona' },
+  { code: 'AR', name: 'Arkansas' },
+  { code: 'CA', name: 'California' },
+  { code: 'CO', name: 'Colorado' },
+  { code: 'CT', name: 'Connecticut' },
+  { code: 'DE', name: 'Delaware' },
+  { code: 'FL', name: 'Florida' },
+  { code: 'GA', name: 'Georgia' },
+  { code: 'HI', name: 'Hawaii' },
+  { code: 'ID', name: 'Idaho' },
+  { code: 'IL', name: 'Illinois' },
+  { code: 'IN', name: 'Indiana' },
+  { code: 'IA', name: 'Iowa' },
+  { code: 'KS', name: 'Kansas' },
+  { code: 'KY', name: 'Kentucky' },
+  { code: 'LA', name: 'Louisiana' },
+  { code: 'ME', name: 'Maine' },
+  { code: 'MD', name: 'Maryland' },
+  { code: 'MA', name: 'Massachusetts' },
+  { code: 'MI', name: 'Michigan' },
+  { code: 'MN', name: 'Minnesota' },
+  { code: 'MS', name: 'Mississippi' },
+  { code: 'MO', name: 'Missouri' },
+  { code: 'MT', name: 'Montana' },
+  { code: 'NE', name: 'Nebraska' },
+  { code: 'NV', name: 'Nevada' },
+  { code: 'NH', name: 'New Hampshire' },
+  { code: 'NJ', name: 'New Jersey' },
+  { code: 'NM', name: 'New Mexico' },
+  { code: 'NY', name: 'New York' },
+  { code: 'NC', name: 'North Carolina' },
+  { code: 'ND', name: 'North Dakota' },
+  { code: 'OH', name: 'Ohio' },
+  { code: 'OK', name: 'Oklahoma' },
+  { code: 'OR', name: 'Oregon' },
+  { code: 'PA', name: 'Pennsylvania' },
+  { code: 'RI', name: 'Rhode Island' },
+  { code: 'SC', name: 'South Carolina' },
+  { code: 'SD', name: 'South Dakota' },
+  { code: 'TN', name: 'Tennessee' },
+  { code: 'TX', name: 'Texas' },
+  { code: 'UT', name: 'Utah' },
+  { code: 'VT', name: 'Vermont' },
+  { code: 'VA', name: 'Virginia' },
+  { code: 'WA', name: 'Washington' },
+  { code: 'WV', name: 'West Virginia' },
+  { code: 'WI', name: 'Wisconsin' },
+  { code: 'WY', name: 'Wyoming' },
+];
+
+interface ActiveRequest {
+  id: string;
+  mdn: string | '';
+  service: string;
+  status: 'Awaiting MDN' | 'Reserved' | 'Completed' | 'Rejected' | 'Timed Out';
+  till_expiration: number;
+  markup: number;
+  price: number;
+  carrier?: string;
+  createdAt: number;
+  messages: Array<{
+    timestamp: string;
+    date_time: string;
+    from: string;
+    reply: string;
+    pin?: string;
+  }>;
+}
 
 export const SMSGlobe: React.FC = () => {
   const { user } = useAuth();
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [services, setServices] = useState<Array<Service & { finalPrice: number; rentalPrices: Record<string, number> }>>([]);
-  const [countries, setCountries] = useState<Country[]>([]);
-  const [activeNumbers, setActiveNumbers] = useState<SMSNumber[]>([]);
 
-  // Selection states
-  const [selectedService, setSelectedService] = useState<string>('');
-  const [selectedCountry, setSelectedCountry] = useState<string>('');
-  const [selectedDuration, setSelectedDuration] = useState<'one-time' | '3' | '7' | '30'>('one-time');
+  const [services, setServices] = useState<TellabotService[]>([]);
+  const [activeRequests, setActiveRequests] = useState<ActiveRequest[]>([]);
+
+  // One-time selection
+  const [selectedServices, setSelectedServices] = useState<string[]>([]);
   const [searchService, setSearchService] = useState('');
-  const [searchCountry, setSearchCountry] = useState('');
+  const [usePriority, setUsePriority] = useState(false);
+  const [customMarkup, setCustomMarkup] = useState<number | ''>('');
+  const [state, setState] = useState<string>('');
+  const [areaCode, setAreaCode] = useState<string>('');
 
-  // Load initial data
+  // Long-term selection
+  const [rentalService, setRentalService] = useState<string>('');
+  const [rentalDuration, setRentalDuration] = useState<3 | 30>(30);
+  const [rentalState, setRentalState] = useState<string>('');
+  const [rentalAreaCode, setRentalAreaCode] = useState<string>('');
+  const [autoRenew, setAutoRenew] = useState(false);
+
   useEffect(() => {
-    loadInitialData();
-    loadActiveNumbers();
-    
-    // Initialize polling for existing orders
-    if (user) {
-      smsService.initializePolling(user.uid);
-    }
+    const loadServices = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const data = await tellabotApi.listServices();
 
-    // Cleanup on unmount
-    return () => {
-      smsService.cleanup();
+        const normalized: TellabotService[] = data.map((s: any) => ({
+          name: s.name,
+          price: parseFloat(s.price || "0"),
+          ltr_price: parseFloat(s.ltr_price || "0"),
+          ltr_short_price: s.ltr_short_price ? parseFloat(s.ltr_short_price) : undefined,
+          available: parseInt(s.available || "0", 10),
+          ltr_available: parseInt(s.ltr_available || "0", 10),
+          recommended_markup: s.recommended_markup ? parseInt(s.recommended_markup, 10) : undefined,
+        }));
+
+        setServices(normalized);
+      } catch (err: any) {
+        const msg = err.message || "Unknown error";
+        setError(
+          msg.includes("Unauthorized")
+            ? "API key not activated. Check your email for confirmation."
+            : msg
+        );
+        toast.error("Failed to load services");
+      } finally {
+        setLoading(false);
+      }
     };
-  }, [user]);
 
-  // Auto-refresh active numbers
-  useEffect(() => {
-    const interval = setInterval(() => {
-      loadActiveNumbers();
-      smsSessionService.cleanupExpiredNumbers();
-    }, 5000); // Refresh every 5 seconds
+    loadServices();
+
+    const interval = setInterval(loadActiveRequests, 10000);
+    loadActiveRequests();
 
     return () => clearInterval(interval);
-  }, []);
+  }, [user]);
 
-  const loadInitialData = async () => {
+  const loadActiveRequests = async () => {
+    if (!user) {
+      setActiveRequests([]);
+      return;
+    }
+
     try {
-      setLoading(true);
-      const [servicesData, countriesData] = await Promise.all([
-        smsService.getServices(),
-        smsService.getCountries()
-      ]);
-      
-      setServices(servicesData);
-      setCountries(countriesData);
+      const stored = localStorage.getItem(`tellabot_requests_${user.uid}`);
+      if (!stored) {
+        setActiveRequests([]);
+        return;
+      }
+
+      const requests: ActiveRequest[] = JSON.parse(stored);
+
+      const updated = await Promise.all(
+        requests.map(async (req) => {
+          try {
+            const status = await tellabotApi.getRequestStatus(req.id);
+            const messages = await tellabotApi.readSMS({ id: req.id });
+
+            return {
+              ...req,
+              mdn: status.mdn || "",
+              status: status.status,
+              till_expiration: status.till_expiration,
+              markup: status.markup,
+              price: status.price,
+              carrier: status.carrier,
+              messages: messages.map((m) => ({
+                timestamp: m.timestamp.toString(),
+                date_time: m.date_time,
+                from: m.from,
+                reply: m.reply,
+                pin: m.pin,
+              })),
+            };
+          } catch {
+            return req;
+          }
+        })
+      );
+
+      const active = updated.filter((r) => r.status === "Awaiting MDN" || r.status === "Reserved");
+      localStorage.setItem(`tellabot_requests_${user.uid}`, JSON.stringify(active));
+      setActiveRequests(active);
     } catch (err) {
-      setError('Failed to load SMS services');
-      console.error('Error loading initial data:', err);
-    } finally {
-      setLoading(false);
+      console.error("Failed to load active requests");
     }
   };
 
-  const loadActiveNumbers = () => {
-    setActiveNumbers(smsSessionService.getActiveNumbers());
+  const filteredServices = services.filter((s) =>
+    s.name.toLowerCase().includes(searchService.toLowerCase())
+  );
+
+  // Fixed: handleServiceSelect function added
+  const handleServiceSelect = (serviceName: string) => {
+    setSelectedServices((prev) =>
+      prev.includes(serviceName)
+        ? prev.filter((n) => n !== serviceName)
+        : [...prev, serviceName]
+    );
   };
 
-  // Get country flag using flag service
-  const getCountryFlag = (countryCode: string) => {
-    return flagService.getFlagUrl(countryCode);
-  };
+  const oneTimePrice = selectedServices.reduce((sum, name) => {
+    const svc = services.find((s) => s.name === name);
+    return sum + (svc?.price || 0);
+  }, 0);
 
-  // Get emoji flag as fallback
-  const getEmojiFlag = (countryCode: string) => {
-    return flagService.getEmojiFlag(countryCode);
-  };
+  const priorityAddon = usePriority && customMarkup ? customMarkup / 100 : 0;
+  const oneTimeFinalPrice = oneTimePrice + priorityAddon;
 
-  // Calculate price based on selection
-  const calculatePrice = () => {
-    if (!selectedService) return 0;
-    
-    const service = services.find(s => s.name === selectedService);
-    if (!service) return 0;
-
-    if (selectedDuration === 'one-time') {
-      return service.finalPrice;
-    } else {
-      return (service.rentalPrices[selectedDuration] || 0) / 100;
+  const handleOneTimeOrder = async () => {
+    if (!user || selectedServices.length === 0) {
+      toast.error("Select at least one service");
+      return;
     }
-  };
-
-  // Handle purchase
-  const handlePurchase = async () => {
-    if (!user || !selectedService || !selectedCountry) {
-      toast.error('Please complete all selections');
+    if (customMarkup && (customMarkup < 10 || customMarkup > 2000)) {
+      toast.error("Markup must be between 10 and 2000");
       return;
     }
 
     try {
       setLoading(true);
-      setError(null);
+      const markup = usePriority ? (customMarkup || 0) : undefined;
 
-      const result = await smsService.orderNumber({
-        service: selectedService,
-        country: selectedCountry,
-        type: selectedDuration === 'one-time' ? 'one-time' : 'rental',
-        rentalDuration: selectedDuration === 'one-time' ? undefined : parseInt(selectedDuration)
-      }, user.uid);
+      const result = await tellabotApi.requestNumber(selectedServices, {
+        state: state || undefined,
+        areacode: areaCode || undefined,
+        markup,
+      });
 
-      if (result.success) {
-        toast.success('SMS number ordered successfully!');
-        // Reset selections
-        setSelectedService('');
-        setSelectedCountry('');
-        setSelectedDuration('one-time');
-        loadActiveNumbers();
-      } else {
-        setError(result.error || 'Failed to order number');
-        toast.error(result.error || 'Failed to order number');
-      }
-    } catch (err) {
-      setError('Failed to order number');
-      toast.error('Failed to order number');
-      console.error('Error ordering number:', err);
+      const newRequests = result.map((r) => ({
+        id: r.id,
+        mdn: r.mdn,
+        service: r.service,
+        status: r.status,
+        till_expiration: r.till_expiration,
+        markup: r.markup,
+        price: r.price,
+        carrier: r.carrier,
+        createdAt: Date.now(),
+        messages: [],
+      }));
+
+      const stored = localStorage.getItem(`tellabot_requests_${user.uid}`);
+      const existing: ActiveRequest[] = stored ? JSON.parse(stored) : [];
+      const updated = [...existing.filter((r) => !newRequests.some((nr) => nr.id === r.id)), ...newRequests];
+      localStorage.setItem(`tellabot_requests_${user.uid}`, JSON.stringify(updated));
+
+      toast.success(
+        result.some((r) => r.status === "Awaiting MDN")
+          ? "Priority bids placed — waiting for numbers..."
+          : "Numbers received!"
+      );
+
+      setSelectedServices([]);
+      setUsePriority(false);
+      setCustomMarkup("");
+      setState("");
+      setAreaCode("");
+      loadActiveRequests();
+    } catch (err: any) {
+      toast.error(err.message || "Order failed");
     } finally {
       setLoading(false);
     }
   };
 
-  // Filter services and countries
-  const filteredServices = services.filter(service =>
-    service.name.toLowerCase().includes(searchService.toLowerCase())
-  );
+  const rentalServiceData = services.find((s) => s.name === rentalService);
+  const rentalPrice = rentalDuration === 3
+    ? rentalServiceData?.ltr_short_price || 0
+    : rentalServiceData?.ltr_price || 0;
 
-  const filteredCountries = countries.filter(country =>
-    country.country.toLowerCase().includes(searchCountry.toLowerCase()) ||
-    country.iso2.toLowerCase().includes(searchCountry.toLowerCase())
-  );
+  const handleRentalOrder = async () => {
+    if (!user || !rentalService) {
+      toast.error("Select a service");
+      return;
+    }
 
-  // Duration options
-  const durationOptions = [
-    { value: 'one-time', label: '20 minutes', description: 'One-time use', icon: Zap },
-    { value: '3', label: '3 days', description: 'Short rental', icon: Clock },
-    { value: '7', label: '1 week', description: 'Medium rental', icon: Clock },
-    { value: '30', label: '1 month', description: 'Long rental', icon: Clock }
-  ];
+    try {
+      setLoading(true);
 
-  const selectedServiceData = services.find(s => s.name === selectedService);
-  const selectedCountryData = countries.find(c => c.iso2 === selectedCountry);
-  const price = calculatePrice();
+      const result = await tellabotApi.rentLongTerm(rentalService, {
+        duration: rentalDuration,
+        state: rentalState || undefined,
+        areacode: rentalAreaCode || undefined,
+        autorenew: autoRenew,
+      });
 
-  if (loading && services.length === 0) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-center">
-          <RefreshCw className="h-8 w-8 animate-spin mx-auto mb-4 text-blue-600" />
-          <p className="text-gray-600">Loading SMS services...</p>
-        </div>
-      </div>
-    );
-  }
+      toast.success("Long-term rental created!");
+      setRentalService("");
+      setRentalDuration(30);
+      setAutoRenew(false);
+      setRentalState("");
+      setRentalAreaCode("");
+    } catch (err: any) {
+      toast.error(err.message || "Rental failed");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
-    <div className="w-full max-w-7xl mx-auto p-3 sm:p-6 space-y-4 sm:space-y-6">
+    <div className="w-full max-w-7xl mx-auto p-4 sm:p-6 space-y-8">
       {/* Header */}
-      <div className="text-center mb-6 sm:mb-8">
-        <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">SMS Globe</h1>
-        <p className="text-sm sm:text-base text-gray-600 px-4">Virtual SMS numbers for verification and communication</p>
-        
-        {/* Features */}
-        <div className="flex flex-col sm:flex-row justify-center gap-3 sm:gap-6 mt-4">
-          <div className="flex items-center justify-center gap-2 text-xs sm:text-sm text-gray-600">
-            <Zap className="h-3 w-3 sm:h-4 sm:w-4 text-blue-600" />
-            <span>Instant Activation</span>
-          </div>
-          <div className="flex items-center justify-center gap-2 text-xs sm:text-sm text-gray-600">
-            <Globe className="h-3 w-3 sm:h-4 sm:w-4 text-green-600" />
-            <span>Global Coverage</span>
-          </div>
-          <div className="flex items-center justify-center gap-2 text-xs sm:text-sm text-gray-600">
-            <Shield className="h-3 w-3 sm:h-4 sm:w-4 text-purple-600" />
-            <span>Secure & Private</span>
-          </div>
-        </div>
+      <div className="text-center">
+        <h1 className="text-4xl font-bold text-gray-900 mb-4">
+          SMS Verification Numbers
+        </h1>
+        <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+          Real US phone numbers for account verification
+        </p>
       </div>
 
-      {/* Error Display */}
+      {/* Global Error */}
       {error && (
-        <Card className="border-red-200 bg-red-50 mx-2 sm:mx-0">
-          <CardContent className="pt-4 sm:pt-6">
-            <div className="flex items-center gap-2 text-red-700">
-              <XCircle className="h-4 w-4 sm:h-5 sm:w-5" />
-              <span className="text-sm sm:text-base">{error}</span>
-            </div>
-          </CardContent>
-        </Card>
+        <Alert variant="destructive" className="max-w-2xl mx-auto">
+          <AlertCircle className="h-5 w-5" />
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
       )}
 
-      <Tabs defaultValue="buy" className="w-full">
-        <TabsList className="grid w-full grid-cols-3 h-auto">
-          <TabsTrigger value="buy" className="flex flex-col sm:flex-row items-center gap-1 sm:gap-2 py-2 sm:py-3 text-xs sm:text-sm">
-            <Phone className="h-3 w-3 sm:h-4 sm:w-4" />
-            <span className="hidden sm:inline">Buy Number</span>
-            <span className="sm:hidden">Buy</span>
+      <Tabs defaultValue="one-time" className="w-full">
+        <TabsList className="grid w-full grid-cols-2 mb-8">
+          <TabsTrigger value="one-time">
+            <Smartphone className="h-5 w-5 mr-2" />
+            One-Time Numbers
           </TabsTrigger>
-          <TabsTrigger value="active" className="flex flex-col sm:flex-row items-center gap-1 sm:gap-2 py-2 sm:py-3 text-xs sm:text-sm">
-            <MessageSquare className="h-3 w-3 sm:h-4 sm:w-4" />
-            <span className="hidden sm:inline">Active Numbers ({activeNumbers.length})</span>
-            <span className="sm:hidden">Active ({activeNumbers.length})</span>
-          </TabsTrigger>
-          <TabsTrigger value="history" className="flex flex-col sm:flex-row items-center gap-1 sm:gap-2 py-2 sm:py-3 text-xs sm:text-sm">
-            <Clock className="h-3 w-3 sm:h-4 sm:w-4" />
-            <span className="hidden sm:inline">Order History</span>
-            <span className="sm:hidden">History</span>
+          <TabsTrigger value="long-term">
+            <Clock className="h-5 w-5 mr-2" />
+            Long-Term Rentals
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="buy" className="space-y-4 sm:space-y-6 mt-4 sm:mt-6">
-          <Card className="w-full mx-2 sm:mx-0">
-            <CardHeader className="pb-4 sm:pb-6">
-              <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
-                <MessageSquare className="h-4 w-4 sm:h-5 sm:w-5" />
-                SMS Number Activation
+        <TabsContent value="one-time">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-2xl flex items-center gap-3">
+                <Smartphone className="h-8 w-8 text-blue-600" />
+                Available Services (One-Time)
               </CardTitle>
-              <p className="text-xs sm:text-sm text-muted-foreground">
-                Simple 4-step process: Select Service → Select Country → Choose Duration → Purchase
-              </p>
             </CardHeader>
-            
-            <CardContent className="space-y-4 sm:space-y-6 px-3 sm:px-6">
-              {/* Step 1: Select Service */}
-              <div className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <div className="flex items-center justify-center w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-blue-600 text-white text-xs sm:text-sm font-medium">
-                    1
-                  </div>
-                  <h3 className="font-semibold text-sm sm:text-base">Select Service</h3>
-                </div>
-                
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-3 w-3 sm:h-4 sm:w-4" />
-                  <Input
-                    placeholder="Search services..."
-                    value={searchService}
-                    onChange={(e) => setSearchService(e.target.value)}
-                    className="pl-8 sm:pl-10 text-sm sm:text-base h-9 sm:h-10"
-                  />
-                </div>
-
-                <ScrollArea className="h-40 sm:h-48 border rounded-lg p-2">
-                  <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2">
-                    {filteredServices.map((service) => (
-                      <Button
-                        key={service.name}
-                        variant={selectedService === service.name ? 'default' : 'outline'}
-                        className="h-auto p-2 sm:p-3 flex flex-col items-center gap-1 sm:gap-2 text-xs"
-                        onClick={() => setSelectedService(service.name)}
-                        disabled={loading}
-                      >
-                        <ServiceIcon 
-                          serviceName={service.name}
-                          size="md"
-                          className="sm:w-8 sm:h-8"
-                        />
-                        <span className="font-medium text-center leading-tight">{service.name}</span>
-                        <span className="text-muted-foreground">${service.finalPrice}</span>
-                      </Button>
-                    ))}
-                  </div>
-                </ScrollArea>
+            <CardContent className="space-y-6">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 h-5 w-5" />
+                <Input
+                  placeholder="Search services..."
+                  value={searchService}
+                  onChange={(e) => setSearchService(e.target.value)}
+                  className="pl-10"
+                />
               </div>
 
-              {/* Step 2: Select Country */}
-              {selectedService && (
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2">
-                    <div className="flex items-center justify-center w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-blue-600 text-white text-xs sm:text-sm font-medium">
-                      2
-                    </div>
-                    <h3 className="font-semibold text-sm sm:text-base">Select Country</h3>
-                  </div>
-                  
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-3 w-3 sm:h-4 sm:w-4" />
-                    <Input
-                      placeholder="Search countries..."
-                      value={searchCountry}
-                      onChange={(e) => setSearchCountry(e.target.value)}
-                      className="pl-8 sm:pl-10 text-sm sm:text-base h-9 sm:h-10"
-                    />
-                  </div>
-
-                  <ScrollArea className="h-40 sm:h-48 border rounded-lg p-2">
-                    <div className="space-y-1">
-                      {filteredCountries.map((country) => (
-                        <Button
-                          key={country.iso2}
-                          variant={selectedCountry === country.iso2 ? 'default' : 'ghost'}
-                          className="w-full justify-start h-auto p-2 sm:p-3 text-xs sm:text-sm"
-                          onClick={() => setSelectedCountry(country.iso2)}
-                          disabled={loading}
-                        >
-                          <img
-                            src={getCountryFlag(country.iso2)}
-                            alt={`${country.country} flag`}
-                            className="w-4 h-3 sm:w-6 sm:h-4 mr-2 sm:mr-3 object-cover rounded"
-                            onError={(e) => {
-                              const target = e.target as HTMLImageElement;
-                              target.style.display = 'none';
-                              const emoji = target.nextElementSibling as HTMLSpanElement;
-                              if (emoji) {
-                                emoji.textContent = getEmojiFlag(country.iso2);
-                                emoji.style.display = 'inline';
-                              }
-                            }}
-                          />
-                          <span className="text-sm sm:text-base mr-2 sm:mr-3" style={{ display: 'none' }}></span>
-                          <div className="flex-1 text-left">
-                            <div className="font-medium">{country.country}</div>
-                            <div className="text-xs text-muted-foreground">{country.iso2}</div>
-                          </div>
-                        </Button>
+              {/* Geo Targeting */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium mb-1">State (optional)</label>
+                  <Select value={state} onValueChange={setState}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select state" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {US_STATES.map((s) => (
+                        <SelectItem key={s.code} value={s.code}>
+                          {s.name} ({s.code})
+                        </SelectItem>
                       ))}
-                    </div>
-                  </ScrollArea>
+                    </SelectContent>
+                  </Select>
                 </div>
-              )}
+                <div>
+                  <label className="block text-sm font-medium mb-1">Area Code (optional)</label>
+                  <Input
+                    placeholder="e.g. 415"
+                    value={areaCode}
+                    onChange={(e) => setAreaCode(e.target.value.replace(/\D/g, '').slice(0, 3))}
+                    maxLength={3}
+                  />
+                </div>
+              </div>
 
-              {/* Step 3: Select Duration */}
-              {selectedService && selectedCountry && (
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2">
-                    <div className="flex items-center justify-center w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-blue-600 text-white text-xs sm:text-sm font-medium">
-                      3
-                    </div>
-                    <h3 className="font-semibold text-sm sm:text-base">Select Duration</h3>
-                  </div>
-                  
-                  <div className="grid grid-cols-2 gap-2 sm:gap-3">
-                    {durationOptions.map((option) => {
-                      const isSelected = selectedDuration === option.value;
-                      const optionPrice = option.value === 'one-time' 
-                        ? selectedServiceData?.finalPrice || 0
-                        : (selectedServiceData?.rentalPrices[option.value] || 0) / 100;
+              <ScrollArea className="h-96 border rounded-lg p-4">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                  {filteredServices.length === 0 ? (
+                    <p className="col-span-full text-center text-gray-500 py-8">
+                      No services found
+                    </p>
+                  ) : (
+                    filteredServices.map((service) => {
+                      const isSelected = selectedServices.includes(service.name);
+                      const hasStock = service.available > 0;
 
                       return (
-                        <Button
-                          key={option.value}
-                          variant={isSelected ? 'default' : 'outline'}
-                          className="h-auto p-3 sm:p-4 flex flex-col items-center gap-1 sm:gap-2 text-xs sm:text-sm"
-                          onClick={() => setSelectedDuration(option.value as any)}
-                          disabled={loading}
+                        <div
+                          key={service.name}
+                          className={`border rounded-lg p-4 cursor-pointer transition-all ${
+                            isSelected ? "border-primary bg-primary/10 ring-2 ring-primary" : "hover:border-primary"
+                          } ${!hasStock ? "opacity-50 cursor-not-allowed" : ""}`}
+                          onClick={() => hasStock && handleServiceSelect(service.name)}
                         >
-                          <option.icon className="h-3 w-3 sm:h-4 sm:w-4" />
-                          <span className="font-medium">{option.label}</span>
-                          <span className="text-muted-foreground text-center">{option.description}</span>
-                          <span className="text-sm sm:text-base font-bold text-green-600">${optionPrice.toFixed(2)}</span>
-                        </Button>
+                          <div className="flex items-center justify-between mb-2">
+                            <ServiceIcon serviceName={service.name} size="lg" />
+                            <Checkbox 
+                              checked={isSelected} 
+                              disabled 
+                              className="pointer-events-none" 
+                            />
+                          </div>
+                          <p className="font-medium text-center">{service.name}</p>
+                          <div className="text-center mt-2">
+                            <Badge variant={hasStock ? "default" : "secondary"}>
+                              {service.available} left
+                            </Badge>
+                          </div>
+                          <p className="text-lg font-bold text-green-600 text-center mt-2">
+                            ${service.price.toFixed(2)}
+                          </p>
+                          {service.recommended_markup && service.recommended_markup > 0 && (
+                            <p className="text-xs text-gray-500 text-center">
+                              +${(service.recommended_markup / 100).toFixed(2)} priority
+                            </p>
+                          )}
+                        </div>
                       );
-                    })}
-                  </div>
+                    })
+                  )}
                 </div>
-              )}
+              </ScrollArea>
 
-              {/* Step 4: Review & Purchase */}
-              {selectedService && selectedCountry && (
-                <div className="space-y-3 sm:space-y-4 p-3 sm:p-4 bg-gray-50 rounded-lg">
-                  <div className="flex items-center gap-2">
-                    <div className="flex items-center justify-center w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-blue-600 text-white text-xs sm:text-sm font-medium">
-                      4
+              {selectedServices.length > 0 && (
+                <div className="p-6 bg-blue-50 rounded-xl border-2 border-blue-200">
+                  <div className="flex justify-between items-start mb-6">
+                    <div>
+                      <h3 className="text-2xl font-bold">
+                        {selectedServices.length === 1 ? selectedServices[0] : `${selectedServices.length} Services`}
+                      </h3>
+                      <p className="text-gray-600">
+                        {selectedServices.length} number{selectedServices.length > 1 ? 's' : ''} will be requested
+                      </p>
                     </div>
-                    <h3 className="font-semibold text-sm sm:text-base">Review & Purchase</h3>
-                  </div>
-
-                  <div className="space-y-2 sm:space-y-3">
-                    <div className="flex justify-between items-center">
-                      <span className="text-xs sm:text-sm text-gray-600">Service:</span>
-                      <div className="flex items-center gap-2">
-                        <ServiceIcon 
-                          serviceName={selectedService}
-                          size="sm"
-                          className="sm:w-5 sm:h-5"
-                        />
-                        <span className="font-medium text-sm sm:text-base">{selectedService}</span>
-                      </div>
-                    </div>
-
-                    <div className="flex justify-between items-center">
-                      <span className="text-xs sm:text-sm text-gray-600">Country:</span>
-                      <div className="flex items-center gap-2">
-                        <img
-                          src={getCountryFlag(selectedCountry)}
-                          alt={`${selectedCountryData?.country} flag`}
-                          className="w-4 h-3 sm:w-6 sm:h-4 object-cover rounded"
-                          onError={(e) => {
-                            const target = e.target as HTMLImageElement;
-                            target.style.display = 'none';
-                            const emoji = target.nextElementSibling as HTMLSpanElement;
-                            if (emoji) {
-                              emoji.textContent = getEmojiFlag(selectedCountry);
-                              emoji.style.display = 'inline';
-                            }
-                          }}
-                        />
-                        <span className="text-sm sm:text-base" style={{ display: 'none' }}></span>
-                        <span className="font-medium text-sm sm:text-base">{selectedCountryData?.country}</span>
-                      </div>
-                    </div>
-
-                    <div className="flex justify-between items-center">
-                      <span className="text-xs sm:text-sm text-gray-600">Duration:</span>
-                      <span className="font-medium text-sm sm:text-base">
-                        {durationOptions.find(opt => opt.value === selectedDuration)?.label}
-                      </span>
-                    </div>
-
-                    <div className="flex justify-between items-center pt-2 border-t">
-                      <span className="font-semibold text-sm sm:text-base">Total Price:</span>
-                      <span className="text-lg sm:text-xl font-bold text-green-600">${price.toFixed(2)}</span>
+                    <div className="text-right">
+                      <p className="text-3xl font-bold text-green-600">
+                        ${oneTimeFinalPrice.toFixed(2)}
+                      </p>
+                      <p className="text-sm text-gray-600">total</p>
                     </div>
                   </div>
 
-                  <Button 
-                    onClick={handlePurchase}
-                    disabled={loading}
-                    className="w-full text-sm sm:text-base"
-                    size="lg"
-                  >
+                  {selectedServices.length > 1 && (
+                    <Alert className="mb-4">
+                      <AlertDescription>
+                        Requesting multiple services will get a number that works for all of them (if available)
+                      </AlertDescription>
+                    </Alert>
+                  )}
+
+                  <div className="mb-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="font-medium">Priority Mode (Faster)</p>
+                        <p className="text-sm text-gray-600">
+                          Bid to jump the queue when stock is low
+                        </p>
+                      </div>
+                      <Button
+                        variant={usePriority ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => {
+                          setUsePriority(!usePriority);
+                          if (!usePriority) setCustomMarkup("");
+                        }}
+                      >
+                        {usePriority ? "ON" : "OFF"}
+                      </Button>
+                    </div>
+
+                    {usePriority && (
+                      <div className="flex items-center gap-3 mt-4">
+                        <Input
+                          type="number"
+                          placeholder={`Suggested: ${services
+                            .find((s) => selectedServices.includes(s.name))
+                            ?.recommended_markup || 10}`}
+                          value={customMarkup}
+                          onChange={(e) => setCustomMarkup(e.target.value ? Number(e.target.value) : "")}
+                          min="10"
+                          max="2000"
+                          step="10"
+                          className="w-48"
+                        />
+                        <span className="text-sm text-gray-600">cents extra</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <Button size="lg" className="w-full text-lg py-6" onClick={handleOneTimeOrder} disabled={loading}>
                     {loading ? (
                       <>
-                        <RefreshCw className="h-3 w-3 sm:h-4 sm:w-4 animate-spin mr-2" />
+                        <RefreshCw className="h-6 w-6 animate-spin mr-3" />
                         Processing...
                       </>
                     ) : (
                       <>
-                        <CheckCircle className="h-3 w-3 sm:h-4 sm:w-4 mr-2" />
-                        Purchase SMS Number
+                        <CheckCircle className="h-6 w-6 mr-3" />
+                        Get {selectedServices.length > 1 ? "Numbers" : "Number"} Now
                       </>
                     )}
                   </Button>
@@ -468,14 +539,130 @@ export const SMSGlobe: React.FC = () => {
           </Card>
         </TabsContent>
 
-        <TabsContent value="active" className="mt-4 sm:mt-6">
-          <ActiveNumbers 
-            numbers={activeNumbers}
-            onRefresh={loadActiveNumbers}
+        <TabsContent value="long-term">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-2xl flex items-center gap-3">
+                <Clock className="h-8 w-8 text-purple-600" />
+                Long-Term Rentals
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-sm font-medium mb-1">Service</label>
+                  <Select value={rentalService} onValueChange={setRentalService}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select service" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {services.map((s) => (
+                        <SelectItem key={s.name} value={s.name}>
+                          {s.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1">Duration</label>
+                  <Select value={rentalDuration.toString()} onValueChange={(v) => setRentalDuration(Number(v) as 3 | 30)}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="3">3 Days</SelectItem>
+                      <SelectItem value="30">30 Days</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-sm font-medium mb-1">State (optional)</label>
+                  <Select value={rentalState} onValueChange={setRentalState}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select state" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {US_STATES.map((s) => (
+                        <SelectItem key={s.code} value={s.code}>
+                          {s.name} ({s.code})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Area Code (optional)</label>
+                  <Input
+                    placeholder="e.g. 415"
+                    value={rentalAreaCode}
+                    onChange={(e) => setRentalAreaCode(e.target.value.replace(/\D/g, '').slice(0, 3))}
+                    maxLength={3}
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center space-x-2">
+                <Checkbox id="autorenew" checked={autoRenew} onCheckedChange={(checked) => setAutoRenew(checked as boolean)} />
+                <label htmlFor="autorenew" className="text-sm font-medium cursor-pointer">
+                  Auto-renew rental (if balance allows)
+                </label>
+              </div>
+
+              {rentalService && rentalServiceData && (
+                <div className="p-6 bg-purple-50 rounded-xl border-2 border-purple-200">
+                  <div className="flex justify-between items-start mb-6">
+                    <div>
+                      <h3 className="text-2xl font-bold">{rentalService}</h3>
+                      <p className="text-gray-600">
+                        {rentalServiceData.ltr_available} long-term available
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-3xl font-bold text-green-600">
+                        ${rentalPrice.toFixed(2)}
+                      </p>
+                      <p className="text-sm text-gray-600">
+                        {rentalDuration === 3 ? "3 days" : "30 days"}
+                      </p>
+                    </div>
+                  </div>
+
+                  <Button size="lg" className="w-full text-lg py-6" onClick={handleRentalOrder} disabled={loading}>
+                    {loading ? (
+                      <>
+                        <RefreshCw className="h-6 w-6 animate-spin mr-3" />
+                        Processing...
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle className="h-6 w-6 mr-3" />
+                        Rent Now
+                      </>
+                    )}
+                  </Button>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="active">
+          <TellabotActiveNumbers
+            requests={activeRequests}
+            onRefresh={loadActiveRequests}
+            onReject={async (id) => {
+              await tellabotApi.rejectRequest(id);
+              loadActiveRequests();
+            }}
           />
         </TabsContent>
 
-        <TabsContent value="history" className="mt-4 sm:mt-6">
+        <TabsContent value="history">
           <OrderHistory userId={user?.uid} />
         </TabsContent>
       </Tabs>

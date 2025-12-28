@@ -133,6 +133,11 @@ service cloud.firestore {
       allow update, delete: if request.auth != null && (isAdmin() || isOwner(resource.data.userId));
     }
 
+    // ===== SECURITY AUDITS =====
+    match /security_audits/{docId} {
+      allow read, write: if isAdmin();
+    }
+
     // ===== USER DATA =====
     match /users/{userId} {
       allow read: if request.auth != null && (isOwner(userId) || isAdmin());
@@ -257,11 +262,25 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
-    // ===== BALANCE & TRANSACTIONS (shared) =====
+    // ===== BALANCE & TRANSACTIONS (Enhanced Security) =====
     match /balance_transactions/{docId} {
       allow read: if request.auth != null && (isOwner(resource.data.userId) || isAdmin());
-      allow create: if request.auth != null && (isOwner(incomingData().userId) || isAdmin()) && incomingData().amount is number;
-      allow update, delete: if isAdmin();
+      allow create: if request.auth != null && isAdmin() && 
+        // Validate transaction data structure
+        incomingData().keys().hasAll(['userId', 'type', 'amount', 'description', 'balanceAfter']) &&
+        // Validate transaction types
+        incomingData().type in ['deposit', 'purchase', 'refund', 'withdrawal', 'referral_bonus'] &&
+        // Validate amount is a number
+        incomingData().amount is number &&
+        // Validate description exists and is not empty
+        incomingData().description is string &&
+        incomingData().description.size() > 0 &&
+        // Validate balanceAfter is non-negative
+        incomingData().balanceAfter >= 0 &&
+        // Prevent correction transactions (security measure)
+        !incomingData().description.matches('.*[Cc]orrection.*');
+      allow update: if false; // Transactions should be immutable for audit trail
+      allow delete: if false; // Transactions should never be deleted for audit trail
     }
     
     match /transactions/{docId} {

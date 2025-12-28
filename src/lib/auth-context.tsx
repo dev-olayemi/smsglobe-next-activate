@@ -17,8 +17,20 @@ interface AuthContextType {
   syncBalance: () => Promise<void>;
   processPurchase: (amount: number, description: string, orderId?: string) => Promise<{ success: boolean; error?: string }>;
   processDeposit: (amount: number, description: string, txRef?: string, transactionId?: string) => Promise<{ success: boolean; error?: string }>;
-  verifyBalance: () => Promise<{ isValid: boolean; discrepancy: number }>;
-  fixBalance: () => Promise<{ success: boolean; error?: string }>;
+  verifyBalance: () => Promise<{ 
+    isValid: boolean; 
+    discrepancy: number; 
+    transactionCount: number;
+    currentBalance?: number;
+    calculatedBalance?: number;
+    lastTransactionDate?: Date;
+  }>;
+  fixBalance: () => Promise<{ 
+    success: boolean; 
+    error?: string;
+    correctionAmount?: number;
+    transactionId?: string;
+  }>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -137,18 +149,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Verify balance integrity
   const verifyBalance = async () => {
     if (!user) {
-      return { isValid: false, discrepancy: 0 };
+      return { isValid: false, discrepancy: 0, transactionCount: 0 };
     }
 
     try {
       const verification = await balanceManager.verifyBalanceIntegrity(user.uid);
       return {
         isValid: verification.isValid,
-        discrepancy: verification.discrepancy
+        discrepancy: verification.discrepancy,
+        transactionCount: verification.transactionCount,
+        currentBalance: verification.currentBalance,
+        calculatedBalance: verification.calculatedBalance,
+        lastTransactionDate: verification.lastTransactionDate
       };
     } catch (error) {
       console.error('Error verifying balance:', error);
-      return { isValid: false, discrepancy: 0 };
+      return { isValid: false, discrepancy: 0, transactionCount: 0 };
     }
   };
 
@@ -168,7 +184,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       }
       
-      return result;
+      return {
+        success: result.success,
+        error: result.error,
+        correctionAmount: result.correctionAmount,
+        transactionId: result.transactionId
+      };
     } catch (error) {
       console.error('Error fixing balance:', error);
       return { 
@@ -240,7 +261,7 @@ export function useAuth() {
         syncBalance: async () => {},
         processPurchase: async () => ({ success: false, error: 'Development mode' }),
         processDeposit: async () => ({ success: false, error: 'Development mode' }),
-        verifyBalance: async () => ({ isValid: false, discrepancy: 0 }),
+        verifyBalance: async () => ({ isValid: false, discrepancy: 0, transactionCount: 0 }),
         fixBalance: async () => ({ success: false, error: 'Development mode' })
       };
     }

@@ -1,168 +1,251 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { supabase } from "@/integrations/supabase/client";
 
-const EDGE_FUNCTION_URL = `https://cvcprxarfiiokkjjjkls.supabase.co/functions/v1/tellabot-api`;
+const TELLABOT_BASE_URL = "https://www.tellabot.com/sims/api_command.php";
 
-interface ApiResponse<T> {
-  status: "ok" | "error";
-  data?: T;
-  message?: string;
+// Your credentials - make sure these are set in your .env file
+const TELLABOT_USERNAME = import.meta.env.VITE_TELL_A_BOT_USERNAME;
+const TELLABOT_API_KEY = import.meta.env.VITE_TELL_A_BOT_API_KEY;
+
+if (!TELLABOT_USERNAME || !TELLABOT_API_KEY) {
+  console.error("Missing Tell A Bot credentials. Please set VITE_TELL_A_BOT_USERNAME and VITE_TELL_A_BOT_API_KEY in your .env file.");
+  throw new Error("Tell A Bot credentials not configured");
 }
 
-async function callApi<T>(action: string, params: Record<string, any> = {}): Promise<T> {
-  const response = await fetch(EDGE_FUNCTION_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "apikey": import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-    },
-    body: JSON.stringify({ action, ...params }),
+interface ApiResponse {
+  status: "ok" | "error";
+  message?: any;
+}
+
+async function callTellabot<T>(cmd: string, params: Record<string, any> = {}): Promise<T> {
+  const urlParams = new URLSearchParams({
+    cmd,
+    user: TELLABOT_USERNAME,
+    api_key: TELLABOT_API_KEY,
+    ...Object.fromEntries(
+      Object.entries(params).map(([key, value]) => [key, String(value)])
+    ),
   });
 
-  const data: ApiResponse<T> = await response.json();
+  const url = `${TELLABOT_BASE_URL}?${urlParams.toString()}`;
 
-  if (data.status === "error") {
-    throw new Error(data.message || "API request failed");
+  const response = await fetch(url, {
+    method: "GET",
+    headers: {
+      "Accept": "application/json",
+    },
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`HTTP ${response.status}: ${text || response.statusText}`);
   }
 
-  return data.data as T;
+  const json: ApiResponse = await response.json();
+
+  if (json.status === "error") {
+    const msg = typeof json.message === "string" ? json.message : JSON.stringify(json.message);
+    throw new Error(msg);
+  }
+
+  return json.message as T;
 }
 
-// Service interface
-export interface SMSService {
+// ========================================
+// PUBLIC INTERFACES (matching real API responses)
+// ========================================
+
+export interface TellabotService {
   name: string;
-  basePrice: number;
-  markupPrice: number;
-  available: number;
-  ltrPrice?: number;
-  ltrMarkupPrice?: number;
-  ltrShortPrice?: number;
-  ltrShortMarkupPrice?: number;
-  ltrAvailable?: number;
-  recommendedMarkup: number;
+  price: number;                  // one-time base price in USD
+  ltr_price: number;              // 30-day rental price
+  ltr_short_price?: number;       // 3-day rental price (if available)
+  available: number;              // one-time numbers currently in stock
+  ltr_available: number;          // long-term numbers in stock
+  recommended_markup?: number;    // suggested priority markup in cents
 }
 
-// Request result interface
-export interface SMSRequestResult {
-  externalId: string;
-  mdn: string | null;
+export interface OneTimeRequest {
+  id: string;
+  mdn: string | "";               // empty if still Awaiting MDN
   service: string;
-  status: string;
-  state?: string;
+  status: "Awaiting MDN" | "Reserved" | "Completed" | "Rejected" | "Timed Out";
+  state?: string;                 // only for geo-targeted
   markup: number;
-  basePrice: number;
-  markupPrice: number;
+  price: number;
   carrier?: string;
-  tillExpiration: number;
+  till_expiration: number;        // seconds left
 }
 
-// SMS message interface
 export interface SMSMessage {
   timestamp: number;
-  dateTime: string;
+  date_time: string;
   from: string;
   to: string;
   service: string;
   price: number;
-  text: string;
+  reply: string;
   pin?: string;
 }
 
-// LTR result interface
-export interface LTRResult {
-  externalId: string;
-  mdn: string | null;
+export interface LongTermRental {
+  id: number;
+  mdn: string;
   service: string;
-  basePrice: number;
-  markupPrice: number;
+  price: number;
+  expires: string;                // human readable date
   carrier?: string;
-  expires?: string;
 }
 
-// LTR status interface
 export interface LTRStatus {
-  ltrStatus: "online" | "offline" | "awaiting_mdn";
+  ltr_status: "online" | "offline" | "awaiting mdn";
   mdn?: string;
-  tillChange: number;
-  nextOnline: number;
+  till_change: number;
+  next_online: number;
   timestamp: number;
-  dateTime: string;
+  date_time: string;
 }
+
+// ========================================
+// TELLABOT API SERVICE (direct calls)
+// ========================================
 
 export const tellabotApi = {
-  // ===== BALANCE & SERVICES =====
+  // === Balance ===
   async getBalance(): Promise<number> {
-    const result = await callApi<{ balance: number }>("balance");
-    return result.balance;
+    const result = await callTellabot<string>("balance");
+    return parseFloat(result);
   },
 
-  async getServices(): Promise<SMSService[]> {
-    const result = await callApi<{ services: SMSService[] }>("list_services");
-    return result.services;
+  // === Services ===
+  async listServices(serviceName?: string): Promise<TellabotService[]> {
+    const params = serviceName ? { service: serviceName } : {};
+    return await callTellabot<TellabotService[]>("list_services", params);
   },
 
-  // ===== ONE-TIME MDN =====
-  async requestMDN(
-    service: string,
-    options?: { mdn?: string; areacode?: string; state?: string; markup?: number }
-  ): Promise<SMSRequestResult> {
-    return callApi<SMSRequestResult>("request_mdn", { service, ...options });
+  // === One-time Numbers ===
+  async requestNumber(
+    service: string | string[],
+    options?: {
+      mdn?: string;
+      areacode?: string;
+      state?: string;
+      markup?: number;
+    }
+  ): Promise<OneTimeRequest[]> {
+    const params: any = {
+      service: Array.isArray(service) ? service.join(",") : service,
+      ...options,
+    };
+
+    const result = await callTellabot<any>("request", params);
+    // API returns array even for single service
+    return Array.isArray(result) ? result : [result];
   },
 
-  async getRequestStatus(id: string): Promise<SMSRequestResult> {
-    return callApi<SMSRequestResult>("request_status", { id });
+  async getRequestStatus(id: string): Promise<OneTimeRequest> {
+    return await callTellabot<OneTimeRequest>("request_status", { id });
   },
 
-  async rejectMDN(id: string): Promise<{ success: boolean; message: string }> {
-    return callApi<{ success: boolean; message: string }>("reject_mdn", { id });
+  async rejectRequest(id: string): Promise<void> {
+    await callTellabot("reject", { id });
   },
 
   async readSMS(options: {
-    id?: string;
-    ltr_id?: string;
+    id?: string;          // one-time request ID
+    ltr_id?: string;      // long-term rental ID
     mdn?: string;
     service?: string;
   }): Promise<SMSMessage[]> {
-    const result = await callApi<{ messages: SMSMessage[] }>("read_sms", options);
-    return result.messages;
+    return await callTellabot<SMSMessage[]>("read_sms", options);
   },
 
-  async sendSMS(mdn: string, to: string, text: string): Promise<{ success: boolean; message: string }> {
-    return callApi<{ success: boolean; message: string }>("send_sms", { mdn, to, text });
+  async sendReply(mdn: string, to: string, text: string): Promise<void> {
+    await callTellabot("send_sms", { mdn, to, sms: text });
   },
 
-  // ===== LONG-TERM RENTALS =====
-  async rentLTR(service: string, duration: number = 30): Promise<LTRResult> {
-    return callApi<LTRResult>("ltr_rent", { service, duration: duration.toString() });
+  // === Long-term Rentals ===
+  async rentLongTerm(
+    service: string,
+    options?: {
+      duration?: 3 | 30;
+      mdn?: string;
+      areacode?: string;
+      state?: string;
+      reserve?: boolean;
+      autorenew?: boolean;
+    }
+  ): Promise<LongTermRental> {
+    const params: any = {
+      service,
+      duration: options?.duration || 30,
+      ...options,
+    };
+    if (options?.autorenew !== undefined) {
+      params.autorenew = options.autorenew ? "true" : "false";
+    }
+    if (options?.reserve) {
+      params.reserve = "true";
+    }
+
+    const result = await callTellabot<any>("ltr_rent", params);
+    return {
+      id: result.id,
+      mdn: result.mdn,
+      service: result.service,
+      price: result.price,
+      expires: result.expires,
+      carrier: result.carrier,
+    };
   },
 
-  async getLTRStatus(options: { ltr_id?: string; mdn?: string }): Promise<LTRStatus> {
-    return callApi<LTRStatus>("ltr_status", options);
+  async toggleAutoRenew(
+    identifiers: { ltr_id?: string; mdn?: string; service?: string },
+    enable?: boolean
+  ): Promise<boolean> {
+    const params: any = { ...identifiers };
+    if (enable !== undefined) {
+      params.autorenew = enable ? "true" : "false";
+    }
+
+    const result = await callTellabot<any>("ltr_autorenew", params);
+    // If no autorenew param, returns current boolean status
+    return typeof result === "boolean" ? result : true;
+  },
+
+  async getLTRStatus(identifiers: { ltr_id?: string; mdn?: string }): Promise<LTRStatus> {
+    return await callTellabot<LTRStatus>("ltr_status", identifiers);
   },
 
   async activateLTR(mdn: string): Promise<LTRStatus> {
-    return callApi<LTRStatus>("ltr_activate", { mdn });
+    return await callTellabot<LTRStatus>("ltr_activate", { mdn });
   },
 
-  async releaseLTR(options: { ltr_id?: string; mdn?: string; service?: string }): Promise<{ success: boolean }> {
-    return callApi<{ success: boolean }>("ltr_release", options);
+  async releaseLTR(identifiers: {
+    ltr_id?: string;
+    mdn?: string;
+    service?: string;
+  }): Promise<void> {
+    await callTellabot("ltr_release", identifiers);
   },
 
-  async setAutoRenew(
-    options: { ltr_id?: string; mdn?: string; service?: string },
-    autorenew?: boolean
-  ): Promise<{ success: boolean; message: string }> {
-    return callApi<{ success: boolean; message: string }>("ltr_autorenew", {
-      ...options,
-      autorenew: autorenew?.toString(),
+  async reportBadNumber(mdn: string): Promise<void> {
+    await callTellabot("ltr_report", { mdn });
+  },
+
+  async switchService(ltr_id: string | number, newService: string): Promise<void> {
+    await callTellabot("ltr_switch_service", {
+      ltr_id: ltr_id.toString(),
+      service: newService,
     });
   },
 
-  async reportMDN(mdn: string): Promise<{ success: boolean }> {
-    return callApi<{ success: boolean }>("ltr_report", { mdn });
-  },
-
-  async switchService(ltr_id: string, service: string): Promise<{ success: boolean; message: string }> {
-    return callApi<{ success: boolean; message: string }>("ltr_switch_service", { ltr_id, service });
+  async setCallForwarding(
+    ltr_id: string | number,
+    destination: string // e.g. "15551234567"
+  ): Promise<void> {
+    await callTellabot("ltr_forward", {
+      ltr_id: ltr_id.toString(),
+      destination,
+    });
   },
 };
