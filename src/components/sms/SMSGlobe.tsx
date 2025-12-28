@@ -22,6 +22,7 @@ import {
   Smartphone,
   AlertCircle,
   MapPin,
+  Calendar,
 } from 'lucide-react';
 
 import { useAuth } from '@/lib/auth-context';
@@ -348,14 +349,24 @@ export const SMSGlobe: React.FC = () => {
       )}
 
       <Tabs defaultValue="one-time" className="w-full">
-        <TabsList className="grid w-full grid-cols-2 mb-8">
-          <TabsTrigger value="one-time">
-            <Smartphone className="h-5 w-5 mr-2" />
-            One-Time Numbers
+        <TabsList className="grid w-full grid-cols-2 lg:grid-cols-4 mb-8 h-auto">
+          <TabsTrigger value="one-time" className="flex-col h-16 lg:h-10 lg:flex-row gap-1 lg:gap-2 text-xs lg:text-sm">
+            <Smartphone className="h-4 w-4 lg:h-5 lg:w-5" />
+            <span className="hidden sm:inline lg:inline">One-Time</span>
+            <span className="sm:hidden">Numbers</span>
           </TabsTrigger>
-          <TabsTrigger value="long-term">
-            <Clock className="h-5 w-5 mr-2" />
-            Long-Term Rentals
+          <TabsTrigger value="long-term" className="flex-col h-16 lg:h-10 lg:flex-row gap-1 lg:gap-2 text-xs lg:text-sm">
+            <Clock className="h-4 w-4 lg:h-5 lg:w-5" />
+            <span className="hidden sm:inline lg:inline">Long-Term</span>
+            <span className="sm:hidden">Rentals</span>
+          </TabsTrigger>
+          <TabsTrigger value="active" className="flex-col h-16 lg:h-10 lg:flex-row gap-1 lg:gap-2 text-xs lg:text-sm">
+            <MessageSquare className="h-4 w-4 lg:h-5 lg:w-5" />
+            <span>Active ({activeRequests.length})</span>
+          </TabsTrigger>
+          <TabsTrigger value="history" className="flex-col h-16 lg:h-10 lg:flex-row gap-1 lg:gap-2 text-xs lg:text-sm">
+            <Calendar className="h-4 w-4 lg:h-5 lg:w-5" />
+            <span>History</span>
           </TabsTrigger>
         </TabsList>
 
