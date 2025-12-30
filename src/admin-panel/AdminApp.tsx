@@ -18,6 +18,7 @@ import { AdminSidebar } from './components/AdminSidebar';
 import { AdminHeader } from './components/AdminHeader';
 import { AdminFooter } from './components/AdminFooter';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Button } from '@/components/ui/button';
 import { Loader2, LayoutDashboard, Users, Package, ShoppingCart, Gift, CreditCard, Settings, BarChart3, MessageSquare, Smartphone } from 'lucide-react';
 import { useState } from 'react';
 
@@ -96,33 +97,63 @@ function AdminLayout({ children }: { children: React.ReactNode }) {
         {mobileMenuOpen && (
           <div className="fixed inset-0 z-50 md:hidden">
             <div 
-              className="fixed inset-0 bg-black/50" 
+              className="fixed inset-0 bg-black/50 backdrop-blur-sm" 
               onClick={() => setMobileMenuOpen(false)}
             />
-            <div className="fixed left-0 top-0 h-full w-64 bg-background border-r">
-              <div className="p-4 border-b">
-                <h2 className="font-semibold">Admin Panel</h2>
+            <div className="fixed left-0 top-0 h-full w-80 max-w-[85vw] bg-background border-r shadow-xl">
+              <div className="p-4 border-b bg-muted/50">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
+                      <span className="text-white font-bold text-sm">A</span>
+                    </div>
+                    <h2 className="font-semibold text-lg">Admin Panel</h2>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="h-8 w-8"
+                  >
+                    <span className="sr-only">Close menu</span>
+                    ×
+                  </Button>
+                </div>
               </div>
-              <ScrollArea className="flex-1 px-3 py-4">
-                <nav className="space-y-2">
+              <ScrollArea className="flex-1 px-4 py-6">
+                <nav className="space-y-1">
                   {navigationItems.map((item) => (
                     <NavLink
                       key={item.href}
                       to={item.href.replace('/admin', '/admin')}
-                      className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground"
+                      className={({ isActive }) =>
+                        `flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium transition-all duration-200 ${
+                          isActive
+                            ? 'bg-primary text-primary-foreground shadow-sm'
+                            : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                        }`
+                      }
                       onClick={() => setMobileMenuOpen(false)}
                     >
-                      <item.icon className="h-4 w-4 flex-shrink-0" />
-                      <span>{item.title}</span>
+                      <item.icon className="h-5 w-5 flex-shrink-0" />
+                      <span className="font-medium">{item.title}</span>
                     </NavLink>
                   ))}
                 </nav>
               </ScrollArea>
+              
+              {/* Mobile Menu Footer */}
+              <div className="border-t p-4 bg-muted/30">
+                <div className="text-xs text-muted-foreground text-center">
+                  <p className="font-medium">Admin Panel v1.0</p>
+                  <p>© 2024 SMS Globe</p>
+                </div>
+              </div>
             </div>
           </div>
         )}
         
-        <main className="flex-1 p-3 sm:p-6 overflow-x-hidden">
+        <main className="flex-1 min-w-0 p-2 sm:p-4 lg:p-6 overflow-x-hidden">
           <div className="max-w-full">
             {children}
           </div>

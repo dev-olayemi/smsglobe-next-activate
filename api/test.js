@@ -9,4 +9,4 @@ export default function handler(req, res) {
     method: req.method,
     query: req.query
   });
-}
+} 

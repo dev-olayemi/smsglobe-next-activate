@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Loader2, Search, Edit, CheckCircle, Clock, Package, Smartphone, Shield, Server, MessageSquare, Eye, X, Save } from 'lucide-react';
+import { Loader2, Search, Edit, CheckCircle, Clock, Package, Smartphone, Shield, Server, MessageSquare, Eye, X, Save, Copy, FileText, ShoppingCart, User } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatStatsAmount } from '../lib/currency-utils';
 
@@ -391,14 +391,28 @@ export function OrdersManagement() {
   const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
   const [statusDialogOpen, setStatusDialogOpen] = useState(false);
   const [fulfillmentDialogOpen, setFulfillmentDialogOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [notesDialogOpen, setNotesDialogOpen] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('all');
+  const [isMobile, setIsMobile] = useState(false);
   
   // Form state for status update
   const [statusForm, setStatusForm] = useState({
     status: '',
     adminNotes: ''
   });
+
+  // Check if mobile on mount and resize
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   useEffect(() => {
     loadOrders();
@@ -457,6 +471,27 @@ export function OrdersManagement() {
       case 'vpn': return <Shield className="h-4 w-4" />;
       case 'sms': return <MessageSquare className="h-4 w-4" />;
       default: return <Package className="h-4 w-4" />;
+    }
+  };
+
+  const getStatusVariant = (status: string): "default" | "secondary" | "destructive" | "outline" => {
+    switch (status) {
+      case 'completed': return 'default';
+      case 'processing': return 'secondary';
+      case 'pending': return 'outline';
+      case 'cancelled':
+      case 'refunded': return 'destructive';
+      default: return 'outline';
+    }
+  };
+
+  const getPaymentStatusVariant = (status: string): "default" | "secondary" | "destructive" | "outline" => {
+    switch (status) {
+      case 'completed': return 'default';
+      case 'pending': return 'outline';
+      case 'failed':
+      case 'refunded': return 'destructive';
+      default: return 'secondary';
     }
   };
 
@@ -544,189 +579,282 @@ export function OrdersManagement() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
+    <div className="space-y-4 sm:space-y-6 p-4 sm:p-6">
+      {/* Header - Mobile Responsive */}
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-bold">Orders Management</h1>
-          <p className="text-muted-foreground">Manage product orders and fulfillment</p>
+          <h1 className="text-2xl sm:text-3xl font-bold">Orders Management</h1>
+          <p className="text-muted-foreground text-sm sm:text-base">Manage product orders and fulfillment</p>
         </div>
-        <Button onClick={loadOrders} variant="outline">
+        <Button onClick={loadOrders} variant="outline" className="w-full sm:w-auto">
           Refresh
         </Button>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Orders</CardTitle>
-            <Package className="h-4 w-4 text-muted-foreground" />
+      {/* Stats Cards - Mobile Responsive Grid */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
+        <Card className="col-span-1">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 px-3 sm:px-6 pt-3 sm:pt-6">
+            <CardTitle className="text-xs sm:text-sm font-medium">Total Orders</CardTitle>
+            <Package className="h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground" />
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.totalOrders}</div>
+          <CardContent className="px-3 sm:px-6 pb-3 sm:pb-6">
+            <div className="text-lg sm:text-2xl font-bold">{stats.totalOrders}</div>
           </CardContent>
         </Card>
         
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Pending</CardTitle>
-            <Clock className="h-4 w-4 text-muted-foreground" />
+        <Card className="col-span-1">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 px-3 sm:px-6 pt-3 sm:pt-6">
+            <CardTitle className="text-xs sm:text-sm font-medium">Pending</CardTitle>
+            <Clock className="h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground" />
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.pendingOrders}</div>
+          <CardContent className="px-3 sm:px-6 pb-3 sm:pb-6">
+            <div className="text-lg sm:text-2xl font-bold">{stats.pendingOrders}</div>
           </CardContent>
         </Card>
         
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Processing</CardTitle>
-            <Loader2 className="h-4 w-4 text-muted-foreground" />
+        <Card className="col-span-1 sm:col-span-1">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 px-3 sm:px-6 pt-3 sm:pt-6">
+            <CardTitle className="text-xs sm:text-sm font-medium">Processing</CardTitle>
+            <Loader2 className="h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground" />
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.processingOrders}</div>
+          <CardContent className="px-3 sm:px-6 pb-3 sm:pb-6">
+            <div className="text-lg sm:text-2xl font-bold">{stats.processingOrders}</div>
           </CardContent>
         </Card>
         
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Completed</CardTitle>
-            <CheckCircle className="h-4 w-4 text-muted-foreground" />
+        <Card className="col-span-1">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 px-3 sm:px-6 pt-3 sm:pt-6">
+            <CardTitle className="text-xs sm:text-sm font-medium">Completed</CardTitle>
+            <CheckCircle className="h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground" />
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.completedOrders}</div>
+          <CardContent className="px-3 sm:px-6 pb-3 sm:pb-6">
+            <div className="text-lg sm:text-2xl font-bold">{stats.completedOrders}</div>
           </CardContent>
         </Card>
         
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Revenue</CardTitle>
-            <Package className="h-4 w-4 text-muted-foreground" />
+        <Card className="col-span-2 sm:col-span-1">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 px-3 sm:px-6 pt-3 sm:pt-6">
+            <CardTitle className="text-xs sm:text-sm font-medium">Revenue</CardTitle>
+            <Package className="h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground" />
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{formatStatsAmount(stats.totalRevenue).primary}</div>
+          <CardContent className="px-3 sm:px-6 pb-3 sm:pb-6">
+            <div className="text-lg sm:text-2xl font-bold">{formatStatsAmount(stats.totalRevenue).primary}</div>
             <div className="text-xs text-muted-foreground">{formatStatsAmount(stats.totalRevenue).secondary}</div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Search */}
+      {/* Search - Mobile Responsive */}
       <Card>
-        <CardHeader>
-          <CardTitle>Order Search</CardTitle>
-          <CardDescription>Search orders by order number, user email, or product name</CardDescription>
+        <CardHeader className="px-4 sm:px-6">
+          <CardTitle className="text-lg sm:text-xl">Order Search</CardTitle>
+          <CardDescription className="text-sm">Search orders by order number, user email, or product name</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="px-4 sm:px-6">
           <div className="flex items-center space-x-2">
-            <Search className="h-4 w-4 text-muted-foreground" />
+            <Search className="h-4 w-4 text-muted-foreground flex-shrink-0" />
             <Input
               placeholder="Search orders..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="max-w-sm"
+              className="w-full"
             />
           </div>
         </CardContent>
       </Card>
 
-      {/* Orders by Category */}
+      {/* Orders by Category - Mobile Responsive */}
       <Card>
-        <CardHeader>
-          <CardTitle>Orders by Category</CardTitle>
-          <CardDescription>Manage orders by product type</CardDescription>
+        <CardHeader className="px-4 sm:px-6">
+          <CardTitle className="text-lg sm:text-xl">Orders by Category</CardTitle>
+          <CardDescription className="text-sm">Manage orders by product type</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="px-4 sm:px-6">
           <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="grid w-full grid-cols-5">
-              <TabsTrigger value="all">All Orders</TabsTrigger>
-              <TabsTrigger value="esim">eSIM</TabsTrigger>
-              <TabsTrigger value="proxy">Proxy</TabsTrigger>
-              <TabsTrigger value="rdp">RDP</TabsTrigger>
-              <TabsTrigger value="vpn">VPN</TabsTrigger>
-            </TabsList>
+            {/* Mobile: Scrollable tabs */}
+            <div className="overflow-x-auto">
+              <TabsList className="grid w-max grid-cols-5 min-w-full sm:w-full">
+                <TabsTrigger value="all" className="text-xs sm:text-sm px-2 sm:px-4">All Orders</TabsTrigger>
+                <TabsTrigger value="esim" className="text-xs sm:text-sm px-2 sm:px-4">eSIM</TabsTrigger>
+                <TabsTrigger value="proxy" className="text-xs sm:text-sm px-2 sm:px-4">Proxy</TabsTrigger>
+                <TabsTrigger value="rdp" className="text-xs sm:text-sm px-2 sm:px-4">RDP</TabsTrigger>
+                <TabsTrigger value="vpn" className="text-xs sm:text-sm px-2 sm:px-4">VPN</TabsTrigger>
+              </TabsList>
+            </div>
             
             <TabsContent value={activeTab} className="mt-4">
-              <div className="rounded-md border">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Order</TableHead>
-                      <TableHead>Product</TableHead>
-                      <TableHead>Customer</TableHead>
-                      <TableHead>Amount</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredOrders.map((order) => (
-                      <TableRow key={order.id}>
-                        <TableCell>
-                          <div>
-                            <div className="font-medium">{order.orderNumber}</div>
-                            <div className="text-sm text-muted-foreground flex items-center">
+              {isMobile ? (
+                // Mobile: Card-based layout
+                <div className="space-y-3">
+                  {filteredOrders.map((order) => (
+                    <Card key={order.id} className="p-4">
+                      <div className="space-y-3">
+                        {/* Order Header */}
+                        <div className="flex justify-between items-start">
+                          <div className="flex-1 min-w-0">
+                            <div className="font-medium text-sm truncate">{order.orderNumber}</div>
+                            <div className="text-xs text-muted-foreground flex items-center mt-1">
                               {getCategoryIcon(order.category)}
                               <span className="ml-1">{order.category.toUpperCase()}</span>
                             </div>
                           </div>
-                        </TableCell>
-                        <TableCell>
-                          <div>
-                            <div className="font-medium">{order.productName}</div>
-                            <div className="text-sm text-muted-foreground">{order.provider}</div>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="text-sm">{order.userEmail}</div>
-                        </TableCell>
-                        <TableCell>
-                          <div>
-                            <div className="font-medium">{formatStatsAmount(order.totalAmount).primary}</div>
-                            <div className="text-xs text-muted-foreground">{formatStatsAmount(order.totalAmount).secondary}</div>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <Badge className={getStatusColor(order.status)}>
+                          <Badge className={`${getStatusColor(order.status)} text-xs flex-shrink-0 ml-2`}>
                             {order.status.charAt(0).toUpperCase() + order.status.slice(1)}
                           </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <div className="text-sm">
+                        </div>
+
+                        {/* Product Info */}
+                        <div className="space-y-1">
+                          <div className="font-medium text-sm truncate">{order.productName}</div>
+                          <div className="text-xs text-muted-foreground">{order.provider}</div>
+                          <div className="text-xs text-muted-foreground truncate">{order.userEmail}</div>
+                        </div>
+
+                        {/* Amount and Date */}
+                        <div className="flex justify-between items-center text-xs">
+                          <div>
+                            <div className="font-medium">{formatStatsAmount(order.totalAmount).primary}</div>
+                            <div className="text-muted-foreground">{formatStatsAmount(order.totalAmount).secondary}</div>
+                          </div>
+                          <div className="text-muted-foreground">
                             {order.createdAt ? new Date(order.createdAt).toLocaleDateString() : 'N/A'}
                           </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center space-x-2">
+                        </div>
+
+                        {/* Actions */}
+                        <div className="flex flex-wrap gap-2 pt-2 border-t">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => openDetailsDialog(order)}
+                            className="flex-1 text-xs"
+                          >
+                            <Eye className="h-3 w-3 mr-1" />
+                            View
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => openStatusDialog(order)}
+                            className="flex-1 text-xs"
+                          >
+                            <Edit className="h-3 w-3 mr-1" />
+                            Edit
+                          </Button>
+                          {(order.status === 'pending' || order.status === 'processing') && order.category !== 'sms' && (
                             <Button
                               size="sm"
-                              variant="outline"
-                              onClick={() => openDetailsDialog(order)}
+                              variant="default"
+                              onClick={() => openFulfillmentDialog(order)}
+                              className="flex-1 text-xs"
                             >
-                              <Eye className="h-3 w-3" />
+                              <CheckCircle className="h-3 w-3 mr-1" />
+                              Fulfill
                             </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => openStatusDialog(order)}
-                            >
-                              <Edit className="h-3 w-3" />
-                            </Button>
-                            {(order.status === 'pending' || order.status === 'processing') && order.category !== 'sms' && (
-                              <Button
-                                size="sm"
-                                variant="default"
-                                onClick={() => openFulfillmentDialog(order)}
-                              >
-                                <CheckCircle className="h-3 w-3" />
-                              </Button>
-                            )}
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
+                          )}
+                        </div>
+                      </div>
+                    </Card>
+                  ))}
+                  {filteredOrders.length === 0 && (
+                    <div className="text-center py-8 text-muted-foreground">
+                      No orders found matching your criteria.
+                    </div>
+                  )}
+                </div>
+              ) : (
+                // Desktop: Table layout
+                <div className="rounded-md border overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="min-w-[120px]">Order</TableHead>
+                          <TableHead className="min-w-[150px]">Product</TableHead>
+                          <TableHead className="min-w-[120px]">Customer</TableHead>
+                          <TableHead className="min-w-[100px]">Amount</TableHead>
+                          <TableHead className="min-w-[100px]">Status</TableHead>
+                          <TableHead className="min-w-[100px]">Date</TableHead>
+                          <TableHead className="min-w-[120px]">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {filteredOrders.map((order) => (
+                          <TableRow key={order.id}>
+                            <TableCell>
+                              <div>
+                                <div className="font-medium">{order.orderNumber}</div>
+                                <div className="text-sm text-muted-foreground flex items-center">
+                                  {getCategoryIcon(order.category)}
+                                  <span className="ml-1">{order.category.toUpperCase()}</span>
+                                </div>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <div>
+                                <div className="font-medium">{order.productName}</div>
+                                <div className="text-sm text-muted-foreground">{order.provider}</div>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <div className="text-sm">{order.userEmail}</div>
+                            </TableCell>
+                            <TableCell>
+                              <div>
+                                <div className="font-medium">{formatStatsAmount(order.totalAmount).primary}</div>
+                                <div className="text-xs text-muted-foreground">{formatStatsAmount(order.totalAmount).secondary}</div>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <Badge className={getStatusColor(order.status)}>
+                                {order.status.charAt(0).toUpperCase() + order.status.slice(1)}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <div className="text-sm">
+                                {order.createdAt ? new Date(order.createdAt).toLocaleDateString() : 'N/A'}
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center space-x-2">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => openDetailsDialog(order)}
+                                >
+                                  <Eye className="h-3 w-3" />
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => openStatusDialog(order)}
+                                >
+                                  <Edit className="h-3 w-3" />
+                                </Button>
+                                {(order.status === 'pending' || order.status === 'processing') && order.category !== 'sms' && (
+                                  <Button
+                                    size="sm"
+                                    variant="default"
+                                    onClick={() => openFulfillmentDialog(order)}
+                                  >
+                                    <CheckCircle className="h-3 w-3" />
+                                  </Button>
+                                )}
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                  {filteredOrders.length === 0 && (
+                    <div className="text-center py-8 text-muted-foreground">
+                      No orders found matching your criteria.
+                    </div>
+                  )}
+                </div>
+              )}
             </TabsContent>
           </Tabs>
         </CardContent>
@@ -734,75 +862,219 @@ export function OrdersManagement() {
 
       {/* Order Details Dialog */}
       <Dialog open={detailsDialogOpen} onOpenChange={setDetailsDialogOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Order Details</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <Package className="h-5 w-5" />
+              Order Details
+            </DialogTitle>
             <DialogDescription>
               Complete information for order {selectedOrder?.orderNumber}
             </DialogDescription>
           </DialogHeader>
           
           {selectedOrder && (
-            <div className="grid gap-4 py-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">Order Information</Label>
-                  <div className="text-sm space-y-1">
-                    <div><strong>Order #:</strong> {selectedOrder.orderNumber}</div>
-                    <div><strong>Category:</strong> {selectedOrder.category.toUpperCase()}</div>
-                    <div><strong>Status:</strong> {selectedOrder.status}</div>
-                    <div><strong>Payment:</strong> {selectedOrder.paymentStatus}</div>
-                  </div>
+            <div className="grid gap-6 py-4">
+              {/* Status and Actions Bar */}
+              <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                <div className="flex items-center gap-4">
+                  <Badge variant={getStatusVariant(selectedOrder.status)}>
+                    {selectedOrder.status}
+                  </Badge>
+                  <Badge variant={getPaymentStatusVariant(selectedOrder.paymentStatus)}>
+                    {selectedOrder.paymentStatus}
+                  </Badge>
                 </div>
-                
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">Product Details</Label>
-                  <div className="text-sm space-y-1">
-                    <div><strong>Product:</strong> {selectedOrder.productName}</div>
-                    <div><strong>Provider:</strong> {selectedOrder.provider}</div>
-                    <div><strong>Quantity:</strong> {selectedOrder.quantity}</div>
-                    <div><strong>Price:</strong> {formatStatsAmount(selectedOrder.price).primary}</div>
-                    <div><strong>Total:</strong> {formatStatsAmount(selectedOrder.totalAmount).primary}</div>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="space-y-2">
-                <Label className="text-sm font-medium">Customer</Label>
-                <div className="text-sm">
-                  <div><strong>Email:</strong> {selectedOrder.userEmail}</div>
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      navigator.clipboard.writeText(selectedOrder.orderNumber);
+                      toast.success('Order number copied to clipboard');
+                    }}
+                  >
+                    <Copy className="h-4 w-4 mr-1" />
+                    Copy Order #
+                  </Button>
                 </div>
               </div>
-              
-              <div className="space-y-2">
-                <Label className="text-sm font-medium">Dates</Label>
-                <div className="text-sm space-y-1">
-                  <div><strong>Created:</strong> {selectedOrder.createdAt ? new Date(selectedOrder.createdAt).toLocaleString() : 'N/A'}</div>
-                  <div><strong>Updated:</strong> {selectedOrder.updatedAt ? new Date(selectedOrder.updatedAt).toLocaleString() : 'N/A'}</div>
+
+              {/* Main Content Grid */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Left Column */}
+                <div className="space-y-6">
+                  {/* Order Information */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-lg flex items-center gap-2">
+                        <FileText className="h-4 w-4" />
+                        Order Information
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      <div className="grid grid-cols-2 gap-2 text-sm">
+                        <span className="font-medium text-gray-600">Order #:</span>
+                        <span className="font-mono">{selectedOrder.orderNumber}</span>
+                        
+                        <span className="font-medium text-gray-600">Category:</span>
+                        <span className="capitalize">{selectedOrder.category}</span>
+                        
+                        <span className="font-medium text-gray-600">Status:</span>
+                        <Badge variant={getStatusVariant(selectedOrder.status)} className="w-fit">
+                          {selectedOrder.status}
+                        </Badge>
+                        
+                        <span className="font-medium text-gray-600">Payment:</span>
+                        <Badge variant={getPaymentStatusVariant(selectedOrder.paymentStatus)} className="w-fit">
+                          {selectedOrder.paymentStatus}
+                        </Badge>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Product Details */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-lg flex items-center gap-2">
+                        <ShoppingCart className="h-4 w-4" />
+                        Product Details
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      <div className="grid grid-cols-2 gap-2 text-sm">
+                        <span className="font-medium text-gray-600">Product:</span>
+                        <span>{selectedOrder.productName}</span>
+                        
+                        <span className="font-medium text-gray-600">Provider:</span>
+                        <span>{selectedOrder.provider}</span>
+                        
+                        <span className="font-medium text-gray-600">Quantity:</span>
+                        <span>{selectedOrder.quantity}</span>
+                        
+                        <span className="font-medium text-gray-600">Unit Price:</span>
+                        <span className="font-mono">{formatStatsAmount(selectedOrder.price).primary}</span>
+                        
+                        <span className="font-medium text-gray-600">Total Amount:</span>
+                        <span className="font-mono font-semibold text-green-600">
+                          {formatStatsAmount(selectedOrder.totalAmount).primary}
+                        </span>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Customer Information */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-lg flex items-center gap-2">
+                        <User className="h-4 w-4" />
+                        Customer Information
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid grid-cols-2 gap-2 text-sm">
+                        <span className="font-medium text-gray-600">Email:</span>
+                        <span>{selectedOrder.userEmail}</span>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* Right Column */}
+                <div className="space-y-6">
+                  {/* Timeline */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-lg flex items-center gap-2">
+                        <Clock className="h-4 w-4" />
+                        Timeline
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      <div className="space-y-2 text-sm">
+                        <div className="flex justify-between">
+                          <span className="font-medium text-gray-600">Created:</span>
+                          <span>{selectedOrder.createdAt ? new Date(selectedOrder.createdAt).toLocaleString() : 'N/A'}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="font-medium text-gray-600">Last Updated:</span>
+                          <span>{selectedOrder.updatedAt ? new Date(selectedOrder.updatedAt).toLocaleString() : 'N/A'}</span>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Admin Notes */}
+                  {selectedOrder.adminNotes && (
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="text-lg flex items-center gap-2">
+                          <MessageSquare className="h-4 w-4" />
+                          Admin Notes
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="text-sm p-3 bg-blue-50 rounded-md border-l-4 border-blue-200">
+                          {selectedOrder.adminNotes}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {/* Fulfillment Data */}
+                  {selectedOrder.fulfillmentData && (
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="text-lg flex items-center gap-2">
+                          <CheckCircle className="h-4 w-4" />
+                          Fulfillment Data
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="text-xs p-3 bg-green-50 rounded-md border border-green-200 overflow-x-auto">
+                          <pre className="whitespace-pre-wrap">
+                            {JSON.stringify(selectedOrder.fulfillmentData, null, 2)}
+                          </pre>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
                 </div>
               </div>
-              
-              {selectedOrder.adminNotes && (
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">Admin Notes</Label>
-                  <div className="text-sm p-2 bg-gray-50 rounded">
-                    {selectedOrder.adminNotes}
-                  </div>
-                </div>
-              )}
-              
-              {selectedOrder.fulfillmentData && (
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">Fulfillment Data</Label>
-                  <div className="text-sm p-2 bg-green-50 rounded">
-                    <pre>{JSON.stringify(selectedOrder.fulfillmentData, null, 2)}</pre>
-                  </div>
-                </div>
-              )}
             </div>
           )}
 
-          <DialogFooter>
+          <DialogFooter className="flex justify-between">
+            <div className="flex gap-2">
+              {selectedOrder && (
+                <>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setSelectedOrder(selectedOrder);
+                      setEditDialogOpen(true);
+                      setDetailsDialogOpen(false);
+                    }}
+                  >
+                    <Edit className="h-4 w-4 mr-1" />
+                    Edit Order
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setSelectedOrder(selectedOrder);
+                      setNotesDialogOpen(true);
+                      setDetailsDialogOpen(false);
+                    }}
+                  >
+                    <MessageSquare className="h-4 w-4 mr-1" />
+                    Add Notes
+                  </Button>
+                </>
+              )}
+            </div>
             <Button variant="outline" onClick={() => setDetailsDialogOpen(false)}>
               Close
             </Button>

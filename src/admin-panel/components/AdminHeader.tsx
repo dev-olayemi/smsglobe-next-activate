@@ -1,4 +1,4 @@
-import { Search, Settings, User, LogOut } from 'lucide-react';
+import { Search, Settings, User, LogOut, Menu, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -17,9 +17,11 @@ import { useNavigate, useLocation } from 'react-router-dom';
 
 interface AdminHeaderProps {
   onToggleSidebar?: () => void;
+  onMobileMenuToggle?: () => void;
+  mobileMenuOpen?: boolean;
 }
 
-export function AdminHeader({ onToggleSidebar }: AdminHeaderProps) {
+export function AdminHeader({ onToggleSidebar, onMobileMenuToggle, mobileMenuOpen }: AdminHeaderProps) {
   const { user, profile, signOut } = useAdminAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -37,38 +39,59 @@ export function AdminHeader({ onToggleSidebar }: AdminHeaderProps) {
 
   return (
     <header className="sticky top-0 z-40 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="container flex h-16 items-center justify-between px-4">
-        {/* Left side - Logo and Search */}
-        <div className="flex items-center gap-4">
+      <div className="flex h-16 items-center justify-between px-4">
+        {/* Left side - Mobile Menu Button, Logo and Search */}
+        <div className="flex items-center gap-2 sm:gap-4">
+          {/* Mobile Menu Button */}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="md:hidden"
+            onClick={onMobileMenuToggle}
+          >
+            {mobileMenuOpen ? (
+              <X className="h-5 w-5" />
+            ) : (
+              <Menu className="h-5 w-5" />
+            )}
+          </Button>
+
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
               <span className="text-white font-bold text-sm">A</span>
             </div>
-            <h1 className="text-xl font-bold">Admin Panel</h1>
+            <h1 className="text-lg sm:text-xl font-bold">Admin Panel</h1>
           </div>
           
-          <div className="hidden md:block">
+          <div className="hidden lg:block">
             <GlobalSearch />
           </div>
         </div>
 
         {/* Right side - Actions and Profile */}
-        <div className="flex items-center gap-4">
-          {/* Notifications */}
-          <NotificationCenter />
+        <div className="flex items-center gap-2 sm:gap-4">
+          {/* Mobile Search Button */}
+          <Button variant="ghost" size="icon" className="lg:hidden">
+            <Search className="w-5 h-5" />
+          </Button>
 
-          {/* Settings */}
-          <Button variant="ghost" size="icon">
+          {/* Notifications */}
+          <div className="hidden sm:block">
+            <NotificationCenter />
+          </div>
+
+          {/* Settings - Hidden on mobile */}
+          <Button variant="ghost" size="icon" className="hidden sm:flex">
             <Settings className="w-5 h-5" />
           </Button>
 
           {/* Profile Dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="relative h-10 w-10 rounded-full">
-                <Avatar className="h-10 w-10">
+              <Button variant="ghost" className="relative h-8 w-8 sm:h-10 sm:w-10 rounded-full">
+                <Avatar className="h-8 w-8 sm:h-10 sm:w-10">
                   <AvatarImage src={user?.photoURL || ''} alt={user?.displayName || 'Admin'} />
-                  <AvatarFallback>
+                  <AvatarFallback className="text-xs sm:text-sm">
                     {user?.displayName?.charAt(0) || user?.email?.charAt(0) || 'A'}
                   </AvatarFallback>
                 </Avatar>
@@ -99,6 +122,14 @@ export function AdminHeader({ onToggleSidebar }: AdminHeaderProps) {
                 <Settings className="mr-2 h-4 w-4" />
                 <span>Settings</span>
               </DropdownMenuItem>
+              {/* Mobile-only menu items */}
+              <div className="sm:hidden">
+                <DropdownMenuSeparator />
+                <DropdownMenuItem>
+                  <Search className="mr-2 h-4 w-4" />
+                  <span>Search</span>
+                </DropdownMenuItem>
+              </div>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={handleSignOut}>
                 <LogOut className="mr-2 h-4 w-4" />

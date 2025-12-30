@@ -97,7 +97,7 @@ export function AdminSidebar({ collapsed = false, onToggleCollapse }: AdminSideb
       <Button
         variant="ghost"
         size="icon"
-        className="absolute -right-3 top-6 z-10 h-6 w-6 rounded-full border bg-background shadow-md hidden md:flex"
+        className="absolute -right-3 top-6 z-10 h-6 w-6 rounded-full border bg-background shadow-md hidden lg:flex"
         onClick={onToggleCollapse}
       >
         {collapsed ? (
@@ -109,7 +109,7 @@ export function AdminSidebar({ collapsed = false, onToggleCollapse }: AdminSideb
 
       {/* Navigation */}
       <ScrollArea className="flex-1 px-3 py-4">
-        <nav className="space-y-2">
+        <nav className="space-y-1">
           {dynamicNavigationItems.map((item) => {
             const isActive = location.pathname === item.href;
             
@@ -118,9 +118,9 @@ export function AdminSidebar({ collapsed = false, onToggleCollapse }: AdminSideb
                 key={item.href}
                 to={item.href}
                 className={cn(
-                  "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground",
+                  "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200 hover:bg-accent hover:text-accent-foreground",
                   isActive 
-                    ? "bg-accent text-accent-foreground" 
+                    ? "bg-primary text-primary-foreground shadow-sm" 
                     : "text-muted-foreground",
                   collapsed && "justify-center px-2"
                 )}
@@ -128,7 +128,7 @@ export function AdminSidebar({ collapsed = false, onToggleCollapse }: AdminSideb
               >
                 <item.icon className="h-4 w-4 flex-shrink-0" />
                 {!collapsed && (
-                  <span className="truncate">{item.title}</span>
+                  <span className="truncate font-medium">{item.title}</span>
                 )}
               </NavLink>
             );
@@ -138,9 +138,9 @@ export function AdminSidebar({ collapsed = false, onToggleCollapse }: AdminSideb
 
       {/* Footer */}
       {!collapsed && (
-        <div className="border-t p-4">
+        <div className="border-t p-4 bg-muted/30">
           <div className="text-xs text-muted-foreground">
-            <p>Admin Panel v1.0</p>
+            <p className="font-medium">Admin Panel v1.0</p>
             <p>© 2024 SMS Globe</p>
           </div>
         </div>
