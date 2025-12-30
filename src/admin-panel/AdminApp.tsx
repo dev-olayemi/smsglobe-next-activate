@@ -12,6 +12,7 @@ import { TransactionsManagement } from './pages/TransactionsManagement';
 import { SettingsManagement } from './pages/SettingsManagement';
 import { ReportsAnalytics } from './pages/ReportsAnalytics';
 import { AdminProfile } from './pages/AdminProfile';
+import { NotificationsPage } from './pages/NotificationsPage';
 import { SMSManagement } from './pages/SMSManagement';
 import { ESimRefillManagement } from './pages/ESimRefillManagement';
 import { AdminSidebar } from './components/AdminSidebar';
@@ -199,6 +200,7 @@ function AdminRoutes() {
           <Route path="/settings" element={<SettingsManagement />} />
           <Route path="/reports" element={<ReportsAnalytics />} />
           <Route path="/profile" element={<AdminProfile />} />
+          <Route path="/notifications" element={<NotificationsPage />} />
         </Routes>
       </ErrorBoundary>
     </AdminLayout>
