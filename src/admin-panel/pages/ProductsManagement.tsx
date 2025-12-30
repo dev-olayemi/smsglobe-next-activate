@@ -932,16 +932,16 @@ export function ProductsManagement() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-bold">Products Management</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold">Products Management</h1>
           <p className="text-muted-foreground">Manage product listings and inventory</p>
         </div>
-        <div className="flex space-x-2">
-          <Button onClick={loadProducts} variant="outline">
+        <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2 w-full sm:w-auto">
+          <Button onClick={loadProducts} variant="outline" className="w-full sm:w-auto">
             Refresh
           </Button>
-          <Button onClick={openCreateDialog}>
+          <Button onClick={openCreateDialog} className="w-full sm:w-auto">
             <Plus className="h-4 w-4 mr-2" />
             Add Product
           </Button>
@@ -949,14 +949,14 @@ export function ProductsManagement() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Products</CardTitle>
             <Package className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.totalProducts}</div>
+            <div className="text-xl sm:text-2xl font-bold">{stats.totalProducts}</div>
           </CardContent>
         </Card>
         
@@ -966,7 +966,7 @@ export function ProductsManagement() {
             <Eye className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.activeProducts}</div>
+            <div className="text-xl sm:text-2xl font-bold">{stats.activeProducts}</div>
           </CardContent>
         </Card>
         
@@ -976,7 +976,7 @@ export function ProductsManagement() {
             <EyeOff className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.inactiveProducts}</div>
+            <div className="text-xl sm:text-2xl font-bold">{stats.inactiveProducts}</div>
           </CardContent>
         </Card>
         
@@ -986,8 +986,8 @@ export function ProductsManagement() {
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{formatStatsAmount(stats.avgPrice).primary}</div>
-            <div className="text-xs text-muted-foreground">{formatStatsAmount(stats.avgPrice).secondary}</div>
+            <div className="text-xl sm:text-2xl font-bold">{formatStatsAmount(stats.avgPrice).primary}</div>
+            <div className="text-xs text-muted-foreground hidden sm:block">{formatStatsAmount(stats.avgPrice).secondary}</div>
           </CardContent>
         </Card>
       </div>
@@ -999,14 +999,23 @@ export function ProductsManagement() {
           <CardDescription>Search products by title, provider, or category</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="flex items-center space-x-2">
-            <Search className="h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search products..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="max-w-sm"
-            />
+          <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-2 sm:space-y-0 sm:space-x-2">
+            <div className="relative flex-1 w-full">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search products..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10 w-full"
+              />
+            </div>
+            <Button 
+              variant="outline" 
+              onClick={loadProducts}
+              className="w-full sm:w-auto"
+            >
+              Refresh
+            </Button>
           </div>
         </CardContent>
       </Card>
@@ -1022,33 +1031,65 @@ export function ProductsManagement() {
             setActiveTab(value);
             setSelectedProducts(new Set()); // Clear selections when changing tabs
           }}>
-            <TabsList className="grid w-full grid-cols-7">
-              <TabsTrigger value="all">All Products ({products.length + gifts.length})</TabsTrigger>
-              <TabsTrigger value="esim">eSIM ({products.filter(p => p.category === 'esim').length})</TabsTrigger>
-              <TabsTrigger value="proxy">Proxy ({products.filter(p => p.category === 'proxy').length})</TabsTrigger>
-              <TabsTrigger value="rdp">RDP ({products.filter(p => p.category === 'rdp').length})</TabsTrigger>
-              <TabsTrigger value="vpn">VPN ({products.filter(p => p.category === 'vpn').length})</TabsTrigger>
-              <TabsTrigger value="sms">SMS ({products.filter(p => p.category === 'sms').length})</TabsTrigger>
-              <TabsTrigger value="gift">Gifts ({gifts.length})</TabsTrigger>
-            </TabsList>
+            {/* Mobile-friendly tabs */}
+            <div className="w-full overflow-x-auto">
+              <TabsList className="grid w-full grid-cols-7 min-w-[700px] lg:min-w-0">
+                <TabsTrigger value="all" className="text-xs sm:text-sm">
+                  <span className="hidden sm:inline">All Products</span>
+                  <span className="sm:hidden">All</span>
+                  <span className="ml-1">({products.length + gifts.length})</span>
+                </TabsTrigger>
+                <TabsTrigger value="esim" className="text-xs sm:text-sm">
+                  <span className="hidden sm:inline">eSIM</span>
+                  <span className="sm:hidden">eSIM</span>
+                  <span className="ml-1">({products.filter(p => p.category === 'esim').length})</span>
+                </TabsTrigger>
+                <TabsTrigger value="proxy" className="text-xs sm:text-sm">
+                  <span className="hidden sm:inline">Proxy</span>
+                  <span className="sm:hidden">Proxy</span>
+                  <span className="ml-1">({products.filter(p => p.category === 'proxy').length})</span>
+                </TabsTrigger>
+                <TabsTrigger value="rdp" className="text-xs sm:text-sm">
+                  <span className="hidden sm:inline">RDP</span>
+                  <span className="sm:hidden">RDP</span>
+                  <span className="ml-1">({products.filter(p => p.category === 'rdp').length})</span>
+                </TabsTrigger>
+                <TabsTrigger value="vpn" className="text-xs sm:text-sm">
+                  <span className="hidden sm:inline">VPN</span>
+                  <span className="sm:hidden">VPN</span>
+                  <span className="ml-1">({products.filter(p => p.category === 'vpn').length})</span>
+                </TabsTrigger>
+                <TabsTrigger value="sms" className="text-xs sm:text-sm">
+                  <span className="hidden sm:inline">SMS</span>
+                  <span className="sm:hidden">SMS</span>
+                  <span className="ml-1">({products.filter(p => p.category === 'sms').length})</span>
+                </TabsTrigger>
+                <TabsTrigger value="gift" className="text-xs sm:text-sm">
+                  <span className="hidden sm:inline">Gifts</span>
+                  <span className="sm:hidden">Gifts</span>
+                  <span className="ml-1">({gifts.length})</span>
+                </TabsTrigger>
+              </TabsList>
+            </div>
             
             <TabsContent value={activeTab} className="mt-4">
               {/* Bulk Actions Bar */}
               {selectedProducts.size > 0 && (
                 <div className="mb-4 p-4 bg-muted/50 rounded-lg border">
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                     <div className="flex items-center gap-2">
                       <CheckSquare className="h-4 w-4" />
                       <span className="text-sm font-medium">
                         {selectedProducts.size} item{selectedProducts.size > 1 ? 's' : ''} selected
                       </span>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
                       <Button
                         size="sm"
                         variant="outline"
                         onClick={handleBulkActivate}
                         disabled={bulkActionLoading}
+                        className="flex-1 sm:flex-none"
                       >
                         {bulkActionLoading ? (
                           <Loader2 className="h-3 w-3 animate-spin mr-1" />
@@ -1062,6 +1103,7 @@ export function ProductsManagement() {
                         variant="outline"
                         onClick={handleBulkDeactivate}
                         disabled={bulkActionLoading}
+                        className="flex-1 sm:flex-none"
                       >
                         {bulkActionLoading ? (
                           <Loader2 className="h-3 w-3 animate-spin mr-1" />
@@ -1075,6 +1117,7 @@ export function ProductsManagement() {
                         variant="destructive"
                         onClick={handleBulkDelete}
                         disabled={bulkActionLoading}
+                        className="flex-1 sm:flex-none"
                       >
                         {bulkActionLoading ? (
                           <Loader2 className="h-3 w-3 animate-spin mr-1" />
@@ -1087,6 +1130,7 @@ export function ProductsManagement() {
                         size="sm"
                         variant="ghost"
                         onClick={() => setSelectedProducts(new Set())}
+                        className="flex-1 sm:flex-none"
                       >
                         <X className="h-3 w-3 mr-1" />
                         Clear
@@ -1096,7 +1140,7 @@ export function ProductsManagement() {
                 </div>
               )}
               
-              <div className="rounded-md border">
+              <div className="rounded-md border overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -1107,12 +1151,12 @@ export function ProductsManagement() {
                           aria-label="Select all products"
                         />
                       </TableHead>
-                      <TableHead>Product</TableHead>
-                      <TableHead>Provider</TableHead>
-                      <TableHead>Category</TableHead>
+                      <TableHead className="min-w-[200px]">Product</TableHead>
+                      <TableHead className="hidden sm:table-cell">Provider</TableHead>
+                      <TableHead className="hidden md:table-cell">Category</TableHead>
                       <TableHead>Price</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Actions</TableHead>
+                      <TableHead className="hidden lg:table-cell">Status</TableHead>
+                      <TableHead className="w-20">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -1127,7 +1171,7 @@ export function ProductsManagement() {
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center space-x-3">
-                            <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center overflow-hidden">
+                            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gray-100 rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0">
                               {(product as any).imageUrl ? (
                                 <img 
                                   src={(product as any).imageUrl} 
@@ -1138,18 +1182,23 @@ export function ProductsManagement() {
                                 getCategoryIcon(product.category || 'default')
                               )}
                             </div>
-                            <div>
-                              <div className="font-medium">{product.name}</div>
-                              <div className="text-sm text-muted-foreground">
-                                {product.description?.substring(0, 50)}...
+                            <div className="min-w-0 flex-1">
+                              <div className="font-medium text-sm sm:text-base truncate">{product.name}</div>
+                              <div className="text-xs sm:text-sm text-muted-foreground truncate">
+                                {product.description?.substring(0, 30)}...
+                              </div>
+                              {/* Show provider and category on mobile */}
+                              <div className="sm:hidden flex flex-wrap gap-1 mt-1">
+                                <Badge variant="outline" className="text-xs">{product.provider}</Badge>
+                                <Badge variant="secondary" className="text-xs">{product.category?.toUpperCase()}</Badge>
                               </div>
                             </div>
                           </div>
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="hidden sm:table-cell">
                           <Badge variant="outline">{product.provider}</Badge>
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="hidden md:table-cell">
                           <div className="flex items-center gap-2">
                             {getCategoryIcon(product.category || 'default')}
                             <Badge variant="secondary">{product.category?.toUpperCase()}</Badge>
@@ -1157,11 +1206,11 @@ export function ProductsManagement() {
                         </TableCell>
                         <TableCell>
                           <div>
-                            <div className="font-medium">{formatStatsAmount(product.price || 0).primary}</div>
-                            <div className="text-xs text-muted-foreground">{formatStatsAmount(product.price || 0).secondary}</div>
+                            <div className="font-medium text-sm">{formatStatsAmount(product.price || 0).primary}</div>
+                            <div className="text-xs text-muted-foreground hidden sm:block">{formatStatsAmount(product.price || 0).secondary}</div>
                           </div>
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="hidden lg:table-cell">
                           <div className="flex items-center space-x-2">
                             <Switch
                               checked={product.isActive}
@@ -1174,11 +1223,20 @@ export function ProductsManagement() {
                           </div>
                         </TableCell>
                         <TableCell>
-                          <div className="flex items-center space-x-2">
+                          <div className="flex items-center space-x-1">
+                            {/* Mobile: Show status toggle */}
+                            <div className="lg:hidden">
+                              <Switch
+                                checked={product.isActive}
+                                onCheckedChange={() => handleToggleActive(product)}
+                                disabled={actionLoading}
+                              />
+                            </div>
                             <Button
                               size="sm"
                               variant="outline"
                               onClick={() => openEditDialog(product)}
+                              className="h-8 w-8 p-0"
                             >
                               <Edit className="h-3 w-3" />
                             </Button>
@@ -1187,6 +1245,7 @@ export function ProductsManagement() {
                               variant="outline"
                               onClick={() => handleDeleteProduct(product.id)}
                               disabled={actionLoading}
+                              className="h-8 w-8 p-0"
                             >
                               <Trash2 className="h-3 w-3" />
                             </Button>
