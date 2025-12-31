@@ -129,6 +129,32 @@ const Orders = () => {
     }
   };
 
+  const handleRefundAcceptance = async (order: ProductOrder) => {
+    if (!user) return;
+    
+    try {
+      const { userNotificationService } = await import('@/lib/user-notification-service');
+      const result = await userNotificationService.acceptRefund(
+        user.uid,
+        order.id,
+        order.price || order.amount || 0
+      );
+      
+      if (result.success) {
+        toast.success(`Refund of ${formatOrderAmount(order.price || order.amount)} accepted successfully!`);
+        // Close modal if open
+        setSelectedOrder(null);
+        // Reload orders to show updated status
+        await loadOrders();
+      } else {
+        toast.error(result.error || 'Failed to accept refund');
+      }
+    } catch (error) {
+      console.error('Error accepting refund:', error);
+      toast.error('Failed to accept refund');
+    }
+  };
+
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'completed':
@@ -239,7 +265,7 @@ const Orders = () => {
               ) : (
                 <div className="space-y-3">
                   {pendingOrders.map((order) => (
-                    <OrderCard key={order.id} order={order} onViewDetails={setSelectedOrder} />
+                    <OrderCard key={order.id} order={order} onViewDetails={setSelectedOrder} onAcceptRefund={handleRefundAcceptance} />
                   ))}
                 </div>
               )}
@@ -266,7 +292,7 @@ const Orders = () => {
               ) : (
                 <div className="space-y-3">
                   {completedOrders.map((order) => (
-                    <OrderCard key={order.id} order={order} onViewDetails={setSelectedOrder} />
+                    <OrderCard key={order.id} order={order} onViewDetails={setSelectedOrder} onAcceptRefund={handleRefundAcceptance} />
                   ))}
                 </div>
               )}
@@ -296,7 +322,7 @@ const Orders = () => {
               ) : (
                 <div className="space-y-3">
                   {orders.map((order) => (
-                    <OrderCard key={order.id} order={order} onViewDetails={setSelectedOrder} />
+                    <OrderCard key={order.id} order={order} onViewDetails={setSelectedOrder} onAcceptRefund={handleRefundAcceptance} />
                   ))}
                 </div>
               )}
@@ -312,6 +338,7 @@ const Orders = () => {
           order={selectedOrder} 
           onClose={() => setSelectedOrder(null)}
           onCopy={copyToClipboard}
+          onAcceptRefund={handleRefundAcceptance}
         />
       )}
     </div>
@@ -319,7 +346,11 @@ const Orders = () => {
 };
 
 // Order Card Component
-const OrderCard = ({ order, onViewDetails }: { order: ProductOrder; onViewDetails: (order: ProductOrder) => void }) => {
+const OrderCard = ({ order, onViewDetails, onAcceptRefund }: { 
+  order: ProductOrder; 
+  onViewDetails: (order: ProductOrder) => void;
+  onAcceptRefund?: (order: ProductOrder) => void;
+}) => {
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'completed':
@@ -377,15 +408,27 @@ const OrderCard = ({ order, onViewDetails }: { order: ProductOrder; onViewDetail
               </div>
             </div>
 
-            <Button 
-              variant="outline" 
-              size="sm"
-              onClick={() => onViewDetails(order)}
-              className="flex-shrink-0"
-            >
-              <Eye className="h-4 w-4 mr-2" />
-              View
-            </Button>
+            <div className="flex gap-2">
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => onViewDetails(order)}
+                className="flex-shrink-0"
+              >
+                <Eye className="h-4 w-4 mr-2" />
+                View
+              </Button>
+              
+              {order.status === 'refunded' && !order.refundAccepted && onAcceptRefund && (
+                <Button 
+                  size="sm"
+                  className="bg-green-600 hover:bg-green-700 flex-shrink-0"
+                  onClick={() => onAcceptRefund(order)}
+                >
+                  Accept Refund
+                </Button>
+              )}
+            </div>
           </div>
 
           {/* Details */}
@@ -417,11 +460,13 @@ const OrderCard = ({ order, onViewDetails }: { order: ProductOrder; onViewDetail
 const OrderDetailsModal = ({ 
   order, 
   onClose, 
-  onCopy 
+  onCopy,
+  onAcceptRefund
 }: { 
   order: ProductOrder; 
   onClose: () => void;
   onCopy: (text: string) => void;
+  onAcceptRefund: (order: ProductOrder) => void;
 }) => {
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-2 sm:p-4 z-50">
@@ -441,10 +486,46 @@ const OrderDetailsModal = ({
           {/* Order Status */}
           <div className="flex flex-col sm:flex-row sm:items-center gap-2">
             <span className="text-sm font-medium">Status:</span>
-            <Badge variant="secondary" className={`${order.status === 'completed' ? 'bg-green-500' : order.status === 'processing' ? 'bg-blue-500' : 'bg-yellow-500'} text-white w-fit`}>
+            <Badge variant="secondary" className={`${order.status === 'completed' ? 'bg-green-500' : order.status === 'processing' ? 'bg-blue-500' : order.status === 'refunded' ? 'bg-orange-500' : 'bg-yellow-500'} text-white w-fit`}>
               {order.status}
             </Badge>
           </div>
+
+          {/* Refund Acceptance */}
+          {order.status === 'refunded' && !order.refundAccepted && (
+            <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+              <div className="flex items-start gap-3">
+                <div className="text-2xl">💸</div>
+                <div className="flex-1">
+                  <h4 className="font-semibold text-orange-900 mb-2">Refund Available</h4>
+                  <p className="text-sm text-orange-800 mb-3">
+                    Your order has been refunded by admin. Click below to accept your refund and add it to your account balance.
+                  </p>
+                  <Button 
+                    className="w-full bg-green-600 hover:bg-green-700"
+                    onClick={() => onAcceptRefund(order)}
+                  >
+                    Accept Refund {formatOrderAmount(order.price || order.amount)}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {order.status === 'refunded' && order.refundAccepted && (
+            <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+              <div className="flex items-start gap-3">
+                <div className="text-2xl">✅</div>
+                <div className="flex-1">
+                  <h4 className="font-semibold text-green-900 mb-1">Refund Accepted</h4>
+                  <p className="text-sm text-green-800">
+                    You have successfully accepted the refund of {formatOrderAmount(order.price || order.amount)}. 
+                    The amount has been added to your account balance.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
 
           <Separator />
 

@@ -32,13 +32,14 @@ class UserNotificationService {
   // Create a notification for a user
   async createNotification(notification: Omit<UserNotification, 'id' | 'createdAt' | 'isRead'>): Promise<string> {
     try {
+      console.log('Creating notification:', notification);
       const docRef = await addDoc(collection(db, 'user_notifications'), {
         ...notification,
         isRead: false,
         createdAt: serverTimestamp()
       });
       
-      console.log('User notification created:', docRef.id);
+      console.log('User notification created successfully:', docRef.id);
       return docRef.id;
     } catch (error) {
       console.error('Error creating user notification:', error);

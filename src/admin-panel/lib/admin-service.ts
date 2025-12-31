@@ -356,6 +356,7 @@ class AdminService {
             break;
             
           case 'refunded':
+            console.log('Creating refund notification for user:', orderData.userId, 'order:', orderId);
             await userNotificationService.createNotification({
               userId: orderData.userId,
               type: 'refund_available' as any,
@@ -372,6 +373,7 @@ class AdminService {
                 action: 'accept_refund'
               }
             });
+            console.log('Refund notification created successfully');
             break;
         }
         
