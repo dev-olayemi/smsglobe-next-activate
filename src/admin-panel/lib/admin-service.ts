@@ -19,6 +19,7 @@ import { db } from '@/lib/firebase';
 import { firestoreService, UserProfile, ProductListing, ProductOrder, BalanceTransaction } from '@/lib/firestore-service';
 import { GiftOrder, Gift, CustomGiftRequest } from '@/lib/gift-service';
 import { DashboardStats, RevenueData, AdminUser, ALLOWED_ADMIN_EMAILS } from './admin-types';
+import { userNotificationService } from '@/lib/user-notification-service';
 
 class AdminService {
   // ===== AUTHENTICATION =====
@@ -267,6 +268,14 @@ class AdminService {
 
   async updateOrderStatus(orderId: string, status: string, adminNotes?: string): Promise<void> {
     try {
+      // First get the order to access user details
+      const orderDoc = await getDoc(doc(db, 'product_orders', orderId));
+      if (!orderDoc.exists()) {
+        throw new Error('Order not found');
+      }
+      
+      const orderData = orderDoc.data() as ProductOrder;
+      
       const updates: any = {
         status,
         updatedAt: serverTimestamp()
@@ -276,9 +285,179 @@ class AdminService {
         updates.adminNotes = adminNotes;
       }
 
+      // Update the order
       await updateDoc(doc(db, 'product_orders', orderId), updates);
+      
+      // Send user notification for status changes
+      try {
+        if (status === 'processing') {
+          await userNotificationService.notifyOrderProcessing(
+            orderData.userId,
+            orderId,
+            orderData.orderNumber || orderId,
+            orderData.productName || 'Product'
+          );
+          console.log(`User notification sent for processing order ${orderId}`);
+        } else if (status === 'completed') {
+          await userNotificationService.notifyOrderCompleted(
+            orderData.userId,
+            orderId,
+            orderData.orderNumber || orderId,
+            orderData.productName || 'Product',
+            orderData.category || 'service'
+          );
+          console.log(`User notification sent for completed order ${orderId}`);
+        }
+      } catch (notificationError) {
+        console.error('Failed to send user notification:', notificationError);
+        // Don't fail the whole operation if notification fails
+      }
+      
     } catch (error) {
       console.error('Error updating order status:', error);
+      throw error;
+    }
+  }
+
+  // Update order with fulfillment data
+  async updateOrderFulfillment(orderId: string, fulfillmentData: any): Promise<void> {
+    try {
+      console.log('Starting order fulfillment for order:', orderId);
+      console.log('Fulfillment data received:', fulfillmentData);
+      
+      // First get the order to access user details
+      const orderDoc = await getDoc(doc(db, 'product_orders', orderId));
+      if (!orderDoc.exists()) {
+        throw new Error('Order not found');
+      }
+      
+      const orderData = orderDoc.data() as ProductOrder;
+      
+      // Build adminResponse object without undefined values
+      const adminResponse: any = {
+        instructions: fulfillmentData.instructions || fulfillmentData.setupInstructions || 'Setup instructions provided',
+        supportContact: 'support@smsglobe.com'
+      };
+
+      // Add credentials only if both username and password exist
+      if (fulfillmentData.username && fulfillmentData.password) {
+        adminResponse.credentials = `Username: ${fulfillmentData.username}\nPassword: ${fulfillmentData.password}`;
+      }
+
+      // Add download links only if configFileUrl exists
+      if (fulfillmentData.configFileUrl) {
+        adminResponse.downloadLinks = [fulfillmentData.configFileUrl];
+      }
+
+      // Add expiry date only if validityPeriod exists
+      if (fulfillmentData.validityPeriod) {
+        adminResponse.expiryDate = fulfillmentData.validityPeriod;
+      }
+
+      // Add category-specific data only if they exist
+      if (fulfillmentData.qrCodeUrl) adminResponse.qrCodeUrl = fulfillmentData.qrCodeUrl;
+      if (fulfillmentData.activationCode) adminResponse.activationCode = fulfillmentData.activationCode;
+      if (fulfillmentData.iccid) adminResponse.iccid = fulfillmentData.iccid;
+      if (fulfillmentData.pin) adminResponse.pin = fulfillmentData.pin;
+      if (fulfillmentData.ipAddress) adminResponse.ipAddress = fulfillmentData.ipAddress;
+      if (fulfillmentData.port) adminResponse.port = fulfillmentData.port;
+      if (fulfillmentData.serverIp) adminResponse.serverIp = fulfillmentData.serverIp;
+      if (fulfillmentData.rdpPort) adminResponse.rdpPort = fulfillmentData.rdpPort;
+      if (fulfillmentData.serverAddress) adminResponse.serverAddress = fulfillmentData.serverAddress;
+      if (fulfillmentData.protocol) adminResponse.protocol = fulfillmentData.protocol;
+      if (fulfillmentData.location) adminResponse.location = fulfillmentData.location;
+      if (fulfillmentData.operatingSystem) adminResponse.operatingSystem = fulfillmentData.operatingSystem;
+      if (fulfillmentData.specifications) adminResponse.specifications = fulfillmentData.specifications;
+
+      console.log('Built adminResponse:', adminResponse);
+
+      const updates: any = {
+        status: 'completed',
+        fulfillmentData: fulfillmentData,
+        adminResponse: adminResponse,
+        adminNotes: 'Order fulfilled with product data',
+        completedAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      };
+
+      console.log('Updates to be saved:', updates);
+
+      // Update the order
+      await updateDoc(doc(db, 'product_orders', orderId), updates);
+      
+      console.log('Order updated successfully');
+      
+      // Send user notification
+      try {
+        await userNotificationService.notifyOrderCompleted(
+          orderData.userId,
+          orderId,
+          orderData.orderNumber || orderId,
+          orderData.productName || 'Product',
+          orderData.category || 'service'
+        );
+        console.log(`User notification sent for completed order ${orderId}`);
+      } catch (notificationError) {
+        console.error('Failed to send user notification:', notificationError);
+        // Don't fail the whole operation if notification fails
+      }
+      
+    } catch (error) {
+      console.error('Error updating order fulfillment:', error);
+      throw error;
+    }
+  }
+
+  // Update fulfillment data only (without changing status)
+  async updateFulfillmentDataOnly(orderId: string, fulfillmentData: any): Promise<void> {
+    try {
+      // Build adminResponse object without undefined values
+      const adminResponse: any = {
+        instructions: fulfillmentData.instructions || fulfillmentData.setupInstructions || 'Setup instructions provided',
+        supportContact: 'support@smsglobe.com'
+      };
+
+      // Add credentials only if both username and password exist
+      if (fulfillmentData.username && fulfillmentData.password) {
+        adminResponse.credentials = `Username: ${fulfillmentData.username}\nPassword: ${fulfillmentData.password}`;
+      }
+
+      // Add download links only if configFileUrl exists
+      if (fulfillmentData.configFileUrl) {
+        adminResponse.downloadLinks = [fulfillmentData.configFileUrl];
+      }
+
+      // Add expiry date only if validityPeriod exists
+      if (fulfillmentData.validityPeriod) {
+        adminResponse.expiryDate = fulfillmentData.validityPeriod;
+      }
+
+      // Add category-specific data only if they exist
+      if (fulfillmentData.qrCodeUrl) adminResponse.qrCodeUrl = fulfillmentData.qrCodeUrl;
+      if (fulfillmentData.activationCode) adminResponse.activationCode = fulfillmentData.activationCode;
+      if (fulfillmentData.iccid) adminResponse.iccid = fulfillmentData.iccid;
+      if (fulfillmentData.pin) adminResponse.pin = fulfillmentData.pin;
+      if (fulfillmentData.ipAddress) adminResponse.ipAddress = fulfillmentData.ipAddress;
+      if (fulfillmentData.port) adminResponse.port = fulfillmentData.port;
+      if (fulfillmentData.serverIp) adminResponse.serverIp = fulfillmentData.serverIp;
+      if (fulfillmentData.rdpPort) adminResponse.rdpPort = fulfillmentData.rdpPort;
+      if (fulfillmentData.serverAddress) adminResponse.serverAddress = fulfillmentData.serverAddress;
+      if (fulfillmentData.protocol) adminResponse.protocol = fulfillmentData.protocol;
+      if (fulfillmentData.location) adminResponse.location = fulfillmentData.location;
+      if (fulfillmentData.operatingSystem) adminResponse.operatingSystem = fulfillmentData.operatingSystem;
+      if (fulfillmentData.specifications) adminResponse.specifications = fulfillmentData.specifications;
+
+      const updates: any = {
+        fulfillmentData: fulfillmentData,
+        adminResponse: adminResponse,
+        updatedAt: serverTimestamp()
+      };
+
+      // Update the order
+      await updateDoc(doc(db, 'product_orders', orderId), updates);
+      
+    } catch (error) {
+      console.error('Error updating fulfillment data:', error);
       throw error;
     }
   }

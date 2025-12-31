@@ -133,6 +133,55 @@ export interface ProductOrder {
     downloadLinks?: string[];
     expiryDate?: string;
     supportContact?: string;
+    // Category-specific fields
+    qrCodeUrl?: string;
+    activationCode?: string;
+    iccid?: string;
+    pin?: string;
+    ipAddress?: string;
+    port?: string;
+    serverIp?: string;
+    rdpPort?: string;
+    username?: string;
+    password?: string;
+    serverAddress?: string;
+    configFileUrl?: string;
+    protocol?: string;
+    location?: string;
+    operatingSystem?: string;
+    specifications?: string;
+  };
+  
+  // Fulfillment data (new structure)
+  fulfillmentData?: {
+    // eSIM specific
+    qrCodeUrl?: string;
+    activationCode?: string;
+    iccid?: string;
+    pin?: string;
+    validityPeriod?: string;
+    
+    // RDP specific
+    serverIp?: string;
+    rdpPort?: string;
+    username?: string;
+    password?: string;
+    operatingSystem?: string;
+    location?: string;
+    specifications?: string;
+    
+    // Proxy specific
+    ipAddress?: string;
+    port?: string;
+    protocol?: string;
+    
+    // VPN specific
+    serverAddress?: string;
+    configFileUrl?: string;
+    
+    // Common fields
+    instructions?: string;
+    setupInstructions?: string;
   };
   
   // Timestamps

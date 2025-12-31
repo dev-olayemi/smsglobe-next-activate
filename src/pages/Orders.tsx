@@ -28,6 +28,75 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
+// Helper function to safely format dates
+const formatOrderDate = (dateValue: any, formatString: string = "MMM dd, yyyy"): string => {
+  try {
+    if (!dateValue) return 'Date unavailable';
+    
+    let date: Date;
+    
+    // Handle Firestore Timestamp
+    if (dateValue && typeof dateValue.toDate === 'function') {
+      date = dateValue.toDate();
+    }
+    // Handle Date object
+    else if (dateValue instanceof Date) {
+      date = dateValue;
+    }
+    // Handle timestamp number
+    else if (typeof dateValue === 'number') {
+      date = new Date(dateValue);
+    }
+    // Handle string dates
+    else if (typeof dateValue === 'string') {
+      date = new Date(dateValue);
+    }
+    else {
+      return 'Date unavailable';
+    }
+    
+    // Check if date is valid
+    if (isNaN(date.getTime())) {
+      return 'Date unavailable';
+    }
+    
+    // Use native formatting instead of date-fns to avoid import issues
+    if (formatString === "PPP") {
+      return date.toLocaleDateString('en-US', { 
+        weekday: 'long', 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric' 
+      });
+    }
+    
+    return date.toLocaleDateString('en-US', { 
+      year: 'numeric', 
+      month: 'short', 
+      day: '2-digit' 
+    });
+  } catch (error) {
+    console.error('Date formatting error:', error);
+    return 'Date unavailable';
+  }
+};
+
+// Helper function to safely format currency
+const formatOrderAmount = (amount: any): string => {
+  try {
+    const numAmount = typeof amount === 'number' ? amount : parseFloat(amount);
+    if (isNaN(numAmount)) return '$0.00';
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(numAmount);
+  } catch (error) {
+    console.error('Currency formatting error:', error);
+    return '$0.00';
+  }
+};
 
 const Orders = () => {
   const navigate = useNavigate();
@@ -300,13 +369,10 @@ const OrderCard = ({ order, onViewDetails }: { order: ProductOrder; onViewDetail
                   #{order.id.slice(-8)}
                 </span>
                 <span className="font-semibold text-green-600">
-                  {formatCurrency(order.price, 'USD')}
+                  {formatOrderAmount(order.price || order.amount)}
                 </span>
                 <span>
-                  {order.createdAt?.toDate 
-                    ? format(order.createdAt.toDate(), "MMM dd, yyyy")
-                    : 'Date unavailable'
-                  }
+                  {formatOrderDate(order.createdAt)}
                 </span>
               </div>
             </div>
@@ -425,14 +491,330 @@ const OrderDetailsModal = ({
             </div>
           )}
 
-          {/* Admin Response */}
-          {order.status === 'completed' && order.adminResponse && (
+          {/* Admin Response / Fulfillment Data */}
+          {order.status === 'completed' && (order.adminResponse || order.fulfillmentData) && (
             <>
               <Separator />
               <div className="space-y-3">
                 <h4 className="font-medium text-green-600 text-sm sm:text-base">✅ Order Completed</h4>
                 
-                {order.adminResponse.credentials && (
+                {/* Show fulfillment data based on category */}
+                {order.category === 'esim' && (order.fulfillmentData || order.adminResponse) && (
+                  <div className="space-y-3 p-3 sm:p-4 bg-green-50 rounded-lg border border-green-200">
+                    <h5 className="font-medium text-green-800">Your eSIM Details</h5>
+                    
+                    {(order.fulfillmentData?.qrCodeUrl || order.adminResponse?.qrCodeUrl) && (
+                      <div>
+                        <span className="text-sm font-medium text-green-800">QR Code:</span>
+                        <div className="mt-2">
+                          <img 
+                            src={order.fulfillmentData?.qrCodeUrl || order.adminResponse?.qrCodeUrl} 
+                            alt="eSIM QR Code" 
+                            className="w-32 h-32 border rounded bg-white"
+                          />
+                        </div>
+                      </div>
+                    )}
+                    
+                    {(order.fulfillmentData?.activationCode || order.adminResponse?.activationCode) && (
+                      <div>
+                        <span className="text-sm font-medium text-green-800">Activation Code:</span>
+                        <div className="flex items-center gap-2 mt-1">
+                          <code className="bg-white px-2 py-1 rounded text-sm font-mono border">
+                            {order.fulfillmentData?.activationCode || order.adminResponse?.activationCode}
+                          </code>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => onCopy(order.fulfillmentData?.activationCode || order.adminResponse?.activationCode)}
+                          >
+                            <Copy className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {(order.fulfillmentData?.iccid || order.adminResponse?.iccid) && (
+                      <div>
+                        <span className="text-sm font-medium text-green-800">ICCID:</span>
+                        <div className="flex items-center gap-2 mt-1">
+                          <code className="bg-white px-2 py-1 rounded text-sm font-mono border">
+                            {order.fulfillmentData?.iccid || order.adminResponse?.iccid}
+                          </code>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => onCopy(order.fulfillmentData?.iccid || order.adminResponse?.iccid)}
+                          >
+                            <Copy className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {(order.fulfillmentData?.pin || order.adminResponse?.pin) && (
+                      <div>
+                        <span className="text-sm font-medium text-green-800">PIN/PUK:</span>
+                        <div className="flex items-center gap-2 mt-1">
+                          <code className="bg-white px-2 py-1 rounded text-sm font-mono border">
+                            {order.fulfillmentData?.pin || order.adminResponse?.pin}
+                          </code>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => onCopy(order.fulfillmentData?.pin || order.adminResponse?.pin)}
+                          >
+                            <Copy className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* RDP Fulfillment */}
+                {order.category === 'rdp' && (order.fulfillmentData || order.adminResponse) && (
+                  <div className="space-y-3 p-3 sm:p-4 bg-blue-50 rounded-lg border border-blue-200">
+                    <h5 className="font-medium text-blue-800">Your RDP Server Details</h5>
+                    
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {(order.fulfillmentData?.serverIp || order.adminResponse?.serverIp) && (
+                        <div>
+                          <span className="text-sm font-medium text-blue-800">Server IP:</span>
+                          <div className="flex items-center gap-2 mt-1">
+                            <code className="bg-white px-2 py-1 rounded text-sm font-mono border">
+                              {order.fulfillmentData?.serverIp || order.adminResponse?.serverIp}
+                            </code>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => onCopy(order.fulfillmentData?.serverIp || order.adminResponse?.serverIp)}
+                            >
+                              <Copy className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                      
+                      {(order.fulfillmentData?.rdpPort || order.adminResponse?.rdpPort) && (
+                        <div>
+                          <span className="text-sm font-medium text-blue-800">Port:</span>
+                          <div className="flex items-center gap-2 mt-1">
+                            <code className="bg-white px-2 py-1 rounded text-sm font-mono border">
+                              {order.fulfillmentData?.rdpPort || order.adminResponse?.rdpPort}
+                            </code>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => onCopy(order.fulfillmentData?.rdpPort || order.adminResponse?.rdpPort)}
+                            >
+                              <Copy className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                      
+                      {(order.fulfillmentData?.username || order.adminResponse?.username) && (
+                        <div>
+                          <span className="text-sm font-medium text-blue-800">Username:</span>
+                          <div className="flex items-center gap-2 mt-1">
+                            <code className="bg-white px-2 py-1 rounded text-sm font-mono border">
+                              {order.fulfillmentData?.username || order.adminResponse?.username}
+                            </code>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => onCopy(order.fulfillmentData?.username || order.adminResponse?.username)}
+                            >
+                              <Copy className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                      
+                      {(order.fulfillmentData?.password || order.adminResponse?.password) && (
+                        <div>
+                          <span className="text-sm font-medium text-blue-800">Password:</span>
+                          <div className="flex items-center gap-2 mt-1">
+                            <code className="bg-white px-2 py-1 rounded text-sm font-mono border">
+                              {order.fulfillmentData?.password || order.adminResponse?.password}
+                            </code>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => onCopy(order.fulfillmentData?.password || order.adminResponse?.password)}
+                            >
+                              <Copy className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Proxy Fulfillment */}
+                {order.category === 'proxy' && (order.fulfillmentData || order.adminResponse) && (
+                  <div className="space-y-3 p-3 sm:p-4 bg-purple-50 rounded-lg border border-purple-200">
+                    <h5 className="font-medium text-purple-800">Your Proxy Details</h5>
+                    
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {(order.fulfillmentData?.ipAddress || order.adminResponse?.ipAddress) && (
+                        <div>
+                          <span className="text-sm font-medium text-purple-800">Proxy IP:</span>
+                          <div className="flex items-center gap-2 mt-1">
+                            <code className="bg-white px-2 py-1 rounded text-sm font-mono border">
+                              {order.fulfillmentData?.ipAddress || order.adminResponse?.ipAddress}
+                            </code>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => onCopy(order.fulfillmentData?.ipAddress || order.adminResponse?.ipAddress)}
+                            >
+                              <Copy className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                      
+                      {(order.fulfillmentData?.port || order.adminResponse?.port) && (
+                        <div>
+                          <span className="text-sm font-medium text-purple-800">Port:</span>
+                          <div className="flex items-center gap-2 mt-1">
+                            <code className="bg-white px-2 py-1 rounded text-sm font-mono border">
+                              {order.fulfillmentData?.port || order.adminResponse?.port}
+                            </code>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => onCopy(order.fulfillmentData?.port || order.adminResponse?.port)}
+                            >
+                              <Copy className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                      
+                      {(order.fulfillmentData?.username || order.adminResponse?.username) && (
+                        <div>
+                          <span className="text-sm font-medium text-purple-800">Username:</span>
+                          <div className="flex items-center gap-2 mt-1">
+                            <code className="bg-white px-2 py-1 rounded text-sm font-mono border">
+                              {order.fulfillmentData?.username || order.adminResponse?.username}
+                            </code>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => onCopy(order.fulfillmentData?.username || order.adminResponse?.username)}
+                            >
+                              <Copy className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                      
+                      {(order.fulfillmentData?.password || order.adminResponse?.password) && (
+                        <div>
+                          <span className="text-sm font-medium text-purple-800">Password:</span>
+                          <div className="flex items-center gap-2 mt-1">
+                            <code className="bg-white px-2 py-1 rounded text-sm font-mono border">
+                              {order.fulfillmentData?.password || order.adminResponse?.password}
+                            </code>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => onCopy(order.fulfillmentData?.password || order.adminResponse?.password)}
+                            >
+                              <Copy className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* VPN Fulfillment */}
+                {order.category === 'vpn' && (order.fulfillmentData || order.adminResponse) && (
+                  <div className="space-y-3 p-3 sm:p-4 bg-indigo-50 rounded-lg border border-indigo-200">
+                    <h5 className="font-medium text-indigo-800">Your VPN Account Details</h5>
+                    
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {(order.fulfillmentData?.username || order.adminResponse?.username) && (
+                        <div>
+                          <span className="text-sm font-medium text-indigo-800">VPN Username:</span>
+                          <div className="flex items-center gap-2 mt-1">
+                            <code className="bg-white px-2 py-1 rounded text-sm font-mono border">
+                              {order.fulfillmentData?.username || order.adminResponse?.username}
+                            </code>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => onCopy(order.fulfillmentData?.username || order.adminResponse?.username)}
+                            >
+                              <Copy className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                      
+                      {(order.fulfillmentData?.password || order.adminResponse?.password) && (
+                        <div>
+                          <span className="text-sm font-medium text-indigo-800">VPN Password:</span>
+                          <div className="flex items-center gap-2 mt-1">
+                            <code className="bg-white px-2 py-1 rounded text-sm font-mono border">
+                              {order.fulfillmentData?.password || order.adminResponse?.password}
+                            </code>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => onCopy(order.fulfillmentData?.password || order.adminResponse?.password)}
+                            >
+                              <Copy className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                      
+                      {(order.fulfillmentData?.serverAddress || order.adminResponse?.serverAddress) && (
+                        <div>
+                          <span className="text-sm font-medium text-indigo-800">Server Address:</span>
+                          <div className="flex items-center gap-2 mt-1">
+                            <code className="bg-white px-2 py-1 rounded text-sm font-mono border">
+                              {order.fulfillmentData?.serverAddress || order.adminResponse?.serverAddress}
+                            </code>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => onCopy(order.fulfillmentData?.serverAddress || order.adminResponse?.serverAddress)}
+                            >
+                              <Copy className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    
+                    {(order.fulfillmentData?.configFileUrl || order.adminResponse?.configFileUrl) && (
+                      <div>
+                        <span className="text-sm font-medium text-indigo-800">Configuration File:</span>
+                        <div className="mt-1">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => window.open(order.fulfillmentData?.configFileUrl || order.adminResponse?.configFileUrl, '_blank')}
+                          >
+                            <Download className="h-3 w-3 mr-2" />
+                            Download Config
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Generic credentials fallback */}
+                {!['esim', 'rdp', 'proxy', 'vpn'].includes(order.category || '') && order.adminResponse?.credentials && (
                   <div className="p-3 sm:p-4 bg-muted rounded-lg">
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-sm font-medium">Access Credentials</span>
@@ -451,14 +833,18 @@ const OrderDetailsModal = ({
                   </div>
                 )}
 
-                {order.adminResponse.instructions && (
+                {/* Instructions */}
+                {(order.fulfillmentData?.instructions || order.adminResponse?.instructions) && (
                   <div>
-                    <span className="text-sm font-medium">Instructions:</span>
-                    <p className="text-sm text-muted-foreground mt-1 break-words">{order.adminResponse.instructions}</p>
+                    <span className="text-sm font-medium">Setup Instructions:</span>
+                    <div className="mt-2 p-3 bg-white rounded border text-sm whitespace-pre-wrap">
+                      {order.fulfillmentData?.instructions || order.adminResponse?.instructions}
+                    </div>
                   </div>
                 )}
 
-                {order.adminResponse.downloadLinks && order.adminResponse.downloadLinks.length > 0 && (
+                {/* Download Links */}
+                {order.adminResponse?.downloadLinks && order.adminResponse.downloadLinks.length > 0 && (
                   <div>
                     <span className="text-sm font-medium">Download Links:</span>
                     <div className="mt-2 space-y-1">
@@ -479,14 +865,18 @@ const OrderDetailsModal = ({
                   </div>
                 )}
 
-                {order.adminResponse.expiryDate && (
+                {/* Expiry Date */}
+                {(order.fulfillmentData?.validityPeriod || order.adminResponse?.expiryDate) && (
                   <div>
-                    <span className="text-sm font-medium">Expires:</span>
-                    <p className="text-sm text-muted-foreground break-words">{order.adminResponse.expiryDate}</p>
+                    <span className="text-sm font-medium">Validity:</span>
+                    <p className="text-sm text-muted-foreground break-words">
+                      {order.fulfillmentData?.validityPeriod || order.adminResponse?.expiryDate}
+                    </p>
                   </div>
                 )}
 
-                {order.adminResponse.supportContact && (
+                {/* Support Contact */}
+                {order.adminResponse?.supportContact && (
                   <div>
                     <span className="text-sm font-medium">Support Contact:</span>
                     <p className="text-sm text-muted-foreground break-words">{order.adminResponse.supportContact}</p>
@@ -517,15 +907,12 @@ const OrderDetailsModal = ({
             <div>
               <span className="text-muted-foreground">Order Date:</span>
               <p className="font-medium break-words">
-                {order.createdAt?.toDate 
-                  ? format(order.createdAt.toDate(), "PPP")
-                  : 'Date unavailable'
-                }
+                {formatOrderDate(order.createdAt, "PPP")}
               </p>
             </div>
             <div>
               <span className="text-muted-foreground">Amount Paid:</span>
-              <p className="font-medium">{formatCurrency(order.price, 'USD')}</p>
+              <p className="font-medium">{formatOrderAmount(order.price || order.amount)}</p>
             </div>
           </div>
         </CardContent>

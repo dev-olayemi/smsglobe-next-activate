@@ -9,6 +9,7 @@ import { Menu, Wallet, Home, ShoppingBag, Receipt, Shield, CreditCard, Settings,
 import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
+import { UserNotifications } from "@/components/UserNotifications";
 
 
 
@@ -136,6 +137,7 @@ export const Header = () => {
                   ${profile?.balance !== undefined ? Number(profile.balance).toFixed(2) : "0.00"} USD
                 </span>
               </div>
+              <UserNotifications />
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" size="sm" className="flex items-center gap-1 p-0 hover:bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0">

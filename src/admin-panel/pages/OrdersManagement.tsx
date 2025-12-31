@@ -10,9 +10,58 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Loader2, Search, Edit, CheckCircle, Clock, Package, Smartphone, Shield, Server, MessageSquare, Eye, X, Save, Copy, FileText, ShoppingCart, User } from 'lucide-react';
+import { Loader2, Search, Edit, CheckCircle, Clock, Package, Smartphone, Shield, Server, MessageSquare, Eye, X, Save, Copy, FileText, ShoppingCart, User, Settings } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatStatsAmount } from '../lib/currency-utils';
+import { generateOrderStatusEmail, openGmailWithTemplate, openSimpleGmailCompose } from '../lib/email-templates';
+
+// Helper function to safely format dates
+const formatOrderDate = (dateValue: any, formatString: string = "MMM dd, yyyy"): string => {
+  try {
+    if (!dateValue) return 'N/A';
+    
+    let date: Date;
+    
+    // Handle Firestore Timestamp
+    if (dateValue && typeof dateValue.toDate === 'function') {
+      date = dateValue.toDate();
+    }
+    // Handle Date object
+    else if (dateValue instanceof Date) {
+      date = dateValue;
+    }
+    // Handle timestamp number
+    else if (typeof dateValue === 'number') {
+      date = new Date(dateValue);
+    }
+    // Handle string dates
+    else if (typeof dateValue === 'string') {
+      date = new Date(dateValue);
+    }
+    else {
+      return 'N/A';
+    }
+    
+    // Check if date is valid
+    if (isNaN(date.getTime())) {
+      return 'N/A';
+    }
+    
+    // Use native formatting to avoid import issues
+    return date.toLocaleDateString('en-US', { 
+      year: 'numeric', 
+      month: 'short', 
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  } catch (error) {
+    console.error('Date formatting error:', error);
+    return 'N/A';
+  }
+};
+
+// Email template generator - moved to email-templates.ts
 
 interface ProductOrder {
   id: string;
@@ -22,16 +71,305 @@ interface ProductOrder {
   productId: string;
   productName: string;
   category: 'esim' | 'proxy' | 'rdp' | 'vpn' | 'sms';
-  provider: string;
-  quantity: number;
+  provider?: string;
+  quantity?: number;
   price: number;
-  totalAmount: number;
+  amount: number;
   status: 'pending' | 'processing' | 'completed' | 'cancelled' | 'refunded';
-  paymentStatus: 'pending' | 'completed' | 'failed' | 'refunded';
+  paymentStatus?: 'pending' | 'completed' | 'failed' | 'refunded';
   createdAt: Date;
   updatedAt: Date;
+  completedAt?: Date;
   adminNotes?: string;
   fulfillmentData?: any;
+  requestDetails?: {
+    location?: string;
+    duration?: string;
+    specifications?: string;
+    additionalNotes?: string;
+  };
+}
+
+// Edit Fulfillment form component for updating existing fulfillment data
+function EditFulfillmentForm({ order, onSubmit, loading }: {
+  order: ProductOrder;
+  onSubmit: (data: any) => void;
+  loading: boolean;
+}) {
+  const [formData, setFormData] = useState<any>(order.fulfillmentData || {});
+
+  const handleSubmit = () => {
+    onSubmit(formData);
+  };
+
+  switch (order.category) {
+    case 'esim':
+      return (
+        <div className="space-y-4">
+          <h3 className="text-lg font-semibold">Edit eSIM Fulfillment Data</h3>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>QR Code Image URL *</Label>
+              <Input
+                value={formData.qrCodeUrl || ''}
+                onChange={(e) => setFormData({ ...formData, qrCodeUrl: e.target.value })}
+                placeholder="https://example.com/qr-code.png"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Activation Code *</Label>
+              <Input
+                value={formData.activationCode || ''}
+                onChange={(e) => setFormData({ ...formData, activationCode: e.target.value })}
+                placeholder="Enter activation code"
+              />
+            </div>
+          </div>
+          
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>ICCID</Label>
+              <Input
+                value={formData.iccid || ''}
+                onChange={(e) => setFormData({ ...formData, iccid: e.target.value })}
+                placeholder="Enter ICCID"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>PIN/PUK</Label>
+              <Input
+                value={formData.pin || ''}
+                onChange={(e) => setFormData({ ...formData, pin: e.target.value })}
+                placeholder="Enter PIN/PUK"
+              />
+            </div>
+          </div>
+          
+          <div className="space-y-2">
+            <Label>Setup Instructions</Label>
+            <Textarea
+              value={formData.instructions || ''}
+              onChange={(e) => setFormData({ ...formData, instructions: e.target.value })}
+              placeholder="Step-by-step setup instructions"
+              rows={4}
+            />
+          </div>
+          
+          <div className="space-y-2">
+            <Label>Validity Period</Label>
+            <Input
+              value={formData.validityPeriod || ''}
+              onChange={(e) => setFormData({ ...formData, validityPeriod: e.target.value })}
+              placeholder="e.g., 30 days from activation"
+            />
+          </div>
+          
+          <Button onClick={handleSubmit} disabled={loading}>
+            {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+            Update eSIM Data
+          </Button>
+        </div>
+      );
+
+    case 'rdp':
+      return (
+        <div className="space-y-4">
+          <h3 className="text-lg font-semibold">Edit RDP Fulfillment Data</h3>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Server IP Address *</Label>
+              <Input
+                value={formData.serverIp || ''}
+                onChange={(e) => setFormData({ ...formData, serverIp: e.target.value })}
+                placeholder="192.168.1.100"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>RDP Port *</Label>
+              <Input
+                value={formData.rdpPort || '3389'}
+                onChange={(e) => setFormData({ ...formData, rdpPort: e.target.value })}
+                placeholder="3389"
+              />
+            </div>
+          </div>
+          
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Username *</Label>
+              <Input
+                value={formData.username || ''}
+                onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+                placeholder="Enter username"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Password *</Label>
+              <Input
+                value={formData.password || ''}
+                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                placeholder="Enter password"
+              />
+            </div>
+          </div>
+          
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Operating System</Label>
+              <Input
+                value={formData.operatingSystem || ''}
+                onChange={(e) => setFormData({ ...formData, operatingSystem: e.target.value })}
+                placeholder="Windows Server 2019"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Server Location</Label>
+              <Input
+                value={formData.location || ''}
+                onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+                placeholder="e.g., USA, Germany"
+              />
+            </div>
+          </div>
+          
+          <div className="space-y-2">
+            <Label>Connection Instructions</Label>
+            <Textarea
+              value={formData.instructions || ''}
+              onChange={(e) => setFormData({ ...formData, instructions: e.target.value })}
+              placeholder="How to connect to the RDP server"
+              rows={4}
+            />
+          </div>
+          
+          <Button onClick={handleSubmit} disabled={loading}>
+            {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+            Update RDP Data
+          </Button>
+        </div>
+      );
+
+    case 'proxy':
+      return (
+        <div className="space-y-4">
+          <h3 className="text-lg font-semibold">Edit Proxy Fulfillment Data</h3>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Proxy IP Address *</Label>
+              <Input
+                value={formData.ipAddress || ''}
+                onChange={(e) => setFormData({ ...formData, ipAddress: e.target.value })}
+                placeholder="192.168.1.1"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Port *</Label>
+              <Input
+                value={formData.port || ''}
+                onChange={(e) => setFormData({ ...formData, port: e.target.value })}
+                placeholder="8080"
+              />
+            </div>
+          </div>
+          
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Username *</Label>
+              <Input
+                value={formData.username || ''}
+                onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+                placeholder="Enter username"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Password *</Label>
+              <Input
+                value={formData.password || ''}
+                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                placeholder="Enter password"
+              />
+            </div>
+          </div>
+          
+          <div className="space-y-2">
+            <Label>Usage Instructions</Label>
+            <Textarea
+              value={formData.instructions || ''}
+              onChange={(e) => setFormData({ ...formData, instructions: e.target.value })}
+              placeholder="How to configure and use the proxy"
+              rows={4}
+            />
+          </div>
+          
+          <Button onClick={handleSubmit} disabled={loading}>
+            {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+            Update Proxy Data
+          </Button>
+        </div>
+      );
+
+    case 'vpn':
+      return (
+        <div className="space-y-4">
+          <h3 className="text-lg font-semibold">Edit VPN Fulfillment Data</h3>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Account Username *</Label>
+              <Input
+                value={formData.username || ''}
+                onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+                placeholder="Enter VPN username"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Account Password *</Label>
+              <Input
+                value={formData.password || ''}
+                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                placeholder="Enter VPN password"
+              />
+            </div>
+          </div>
+          
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Server Address</Label>
+              <Input
+                value={formData.serverAddress || ''}
+                onChange={(e) => setFormData({ ...formData, serverAddress: e.target.value })}
+                placeholder="vpn.example.com"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Configuration File URL</Label>
+              <Input
+                value={formData.configFileUrl || ''}
+                onChange={(e) => setFormData({ ...formData, configFileUrl: e.target.value })}
+                placeholder="https://example.com/config.ovpn"
+              />
+            </div>
+          </div>
+          
+          <div className="space-y-2">
+            <Label>Setup Instructions</Label>
+            <Textarea
+              value={formData.instructions || ''}
+              onChange={(e) => setFormData({ ...formData, instructions: e.target.value })}
+              placeholder="How to setup and use the VPN"
+              rows={4}
+            />
+          </div>
+          
+          <Button onClick={handleSubmit} disabled={loading}>
+            {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+            Update VPN Data
+          </Button>
+        </div>
+      );
+
+    default:
+      return <div>Edit form not available for this product type.</div>;
+  }
 }
 
 // Fulfillment form component for different product types
@@ -392,6 +730,7 @@ export function OrdersManagement() {
   const [statusDialogOpen, setStatusDialogOpen] = useState(false);
   const [fulfillmentDialogOpen, setFulfillmentDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editFulfillmentDialogOpen, setEditFulfillmentDialogOpen] = useState(false);
   const [notesDialogOpen, setNotesDialogOpen] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('all');
@@ -445,7 +784,7 @@ export function OrdersManagement() {
     const pendingOrders = orders.filter(o => o.status === 'pending').length;
     const processingOrders = orders.filter(o => o.status === 'processing').length;
     const completedOrders = orders.filter(o => o.status === 'completed').length;
-    const totalRevenue = orders.filter(o => o.status === 'completed').reduce((sum, o) => sum + (o.totalAmount || 0), 0);
+    const totalRevenue = orders.filter(o => o.status === 'completed').reduce((sum, o) => sum + (o.amount || o.price || 0), 0);
 
     return { totalOrders, pendingOrders, processingOrders, completedOrders, totalRevenue };
   };
@@ -546,17 +885,21 @@ export function OrdersManagement() {
       setActionLoading(true);
       
       // Update order with fulfillment data and mark as completed
-      await adminService.updateOrderStatus(selectedOrder.id, 'completed', 'Order fulfilled with product data');
-      
-      // In a real implementation, you'd also save the fulfillment data
-      // await adminService.updateOrderFulfillment(selectedOrder.id, fulfillmentData);
+      await adminService.updateOrderFulfillment(selectedOrder.id, fulfillmentData);
       
       toast.success('Order fulfilled successfully');
       
       // Update local state
       setOrders(orders => orders.map(o => 
         o.id === selectedOrder.id 
-          ? { ...o, status: 'completed', fulfillmentData, adminNotes: 'Order fulfilled with product data' }
+          ? { 
+              ...o, 
+              status: 'completed', 
+              fulfillmentData, 
+              adminNotes: 'Order fulfilled with product data',
+              completedAt: new Date(),
+              updatedAt: new Date()
+            }
           : o
       ));
       
@@ -565,6 +908,38 @@ export function OrdersManagement() {
     } catch (error) {
       console.error('Error fulfilling order:', error);
       toast.error('Failed to fulfill order');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleUpdateFulfillment = async (fulfillmentData: any) => {
+    if (!selectedOrder) return;
+
+    try {
+      setActionLoading(true);
+      
+      // Update order with new fulfillment data (without changing status)
+      await adminService.updateFulfillmentDataOnly(selectedOrder.id, fulfillmentData);
+      
+      toast.success('Fulfillment data updated successfully');
+      
+      // Update local state
+      setOrders(orders => orders.map(o => 
+        o.id === selectedOrder.id 
+          ? { 
+              ...o, 
+              fulfillmentData, 
+              updatedAt: new Date()
+            }
+          : o
+      ));
+      
+      setEditFulfillmentDialogOpen(false);
+      setSelectedOrder(null);
+    } catch (error) {
+      console.error('Error updating fulfillment data:', error);
+      toast.error('Failed to update fulfillment data');
     } finally {
       setActionLoading(false);
     }
@@ -714,11 +1089,11 @@ export function OrdersManagement() {
                         {/* Amount and Date */}
                         <div className="flex justify-between items-center text-xs">
                           <div>
-                            <div className="font-medium">{formatStatsAmount(order.totalAmount).primary}</div>
-                            <div className="text-muted-foreground">{formatStatsAmount(order.totalAmount).secondary}</div>
+                            <div className="font-medium">{formatStatsAmount(order.amount || order.price || 0).primary}</div>
+                            <div className="text-muted-foreground">{formatStatsAmount(order.amount || order.price || 0).secondary}</div>
                           </div>
                           <div className="text-muted-foreground">
-                            {order.createdAt ? new Date(order.createdAt).toLocaleDateString() : 'N/A'}
+                            {formatOrderDate(order.createdAt)}
                           </div>
                         </div>
 
@@ -753,6 +1128,26 @@ export function OrdersManagement() {
                               Fulfill
                             </Button>
                           )}
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              openSimpleGmailCompose(
+                                order.userEmail, 
+                                order.orderNumber || order.id.slice(-8), 
+                                order.status, 
+                                order.productName,
+                                order.fulfillmentData
+                              );
+                              toast.success(`${order.status} email opened in Gmail`);
+                            }}
+                            className="flex-1 text-xs bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100"
+                          >
+                            <svg className="h-3 w-3 mr-1" viewBox="0 0 24 24" fill="currentColor">
+                              <path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/>
+                            </svg>
+                            Email
+                          </Button>
                         </div>
                       </div>
                     </Card>
@@ -802,8 +1197,8 @@ export function OrdersManagement() {
                             </TableCell>
                             <TableCell>
                               <div>
-                                <div className="font-medium">{formatStatsAmount(order.totalAmount).primary}</div>
-                                <div className="text-xs text-muted-foreground">{formatStatsAmount(order.totalAmount).secondary}</div>
+                                <div className="font-medium">{formatStatsAmount(order.amount || order.price || 0).primary}</div>
+                                <div className="text-xs text-muted-foreground">{formatStatsAmount(order.amount || order.price || 0).secondary}</div>
                               </div>
                             </TableCell>
                             <TableCell>
@@ -813,7 +1208,7 @@ export function OrdersManagement() {
                             </TableCell>
                             <TableCell>
                               <div className="text-sm">
-                                {order.createdAt ? new Date(order.createdAt).toLocaleDateString() : 'N/A'}
+                                {formatOrderDate(order.createdAt)}
                               </div>
                             </TableCell>
                             <TableCell>
@@ -841,6 +1236,26 @@ export function OrdersManagement() {
                                     <CheckCircle className="h-3 w-3" />
                                   </Button>
                                 )}
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => {
+                                    openSimpleGmailCompose(
+                                      order.userEmail, 
+                                      order.orderNumber || order.id.slice(-8), 
+                                      order.status, 
+                                      order.productName,
+                                      order.fulfillmentData
+                                    );
+                                    toast.success(`${order.status} email opened in Gmail`);
+                                  }}
+                                  className="bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100"
+                                  title={`Send ${order.status} email`}
+                                >
+                                  <svg className="h-3 w-3" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/>
+                                  </svg>
+                                </Button>
                               </div>
                             </TableCell>
                           </TableRow>
@@ -957,7 +1372,7 @@ export function OrdersManagement() {
                         
                         <span className="font-medium text-gray-600">Total Amount:</span>
                         <span className="font-mono font-semibold text-green-600">
-                          {formatStatsAmount(selectedOrder.totalAmount).primary}
+                          {formatStatsAmount(selectedOrder.amount || selectedOrder.price || 0).primary}
                         </span>
                       </div>
                     </CardContent>
@@ -994,11 +1409,11 @@ export function OrdersManagement() {
                       <div className="space-y-2 text-sm">
                         <div className="flex justify-between">
                           <span className="font-medium text-gray-600">Created:</span>
-                          <span>{selectedOrder.createdAt ? new Date(selectedOrder.createdAt).toLocaleString() : 'N/A'}</span>
+                          <span>{formatOrderDate(selectedOrder.createdAt)}</span>
                         </div>
                         <div className="flex justify-between">
                           <span className="font-medium text-gray-600">Last Updated:</span>
-                          <span>{selectedOrder.updatedAt ? new Date(selectedOrder.updatedAt).toLocaleString() : 'N/A'}</span>
+                          <span>{formatOrderDate(selectedOrder.updatedAt)}</span>
                         </div>
                       </div>
                     </CardContent>
@@ -1031,10 +1446,142 @@ export function OrdersManagement() {
                         </CardTitle>
                       </CardHeader>
                       <CardContent>
-                        <div className="text-xs p-3 bg-green-50 rounded-md border border-green-200 overflow-x-auto">
-                          <pre className="whitespace-pre-wrap">
-                            {JSON.stringify(selectedOrder.fulfillmentData, null, 2)}
-                          </pre>
+                        <div className="space-y-4">
+                          {/* Category-specific display */}
+                          {selectedOrder.category === 'esim' && (
+                            <div className="grid grid-cols-2 gap-4">
+                              {selectedOrder.fulfillmentData.qrCodeUrl && (
+                                <div>
+                                  <label className="text-sm font-medium">QR Code URL:</label>
+                                  <p className="text-sm text-blue-600 break-all">{selectedOrder.fulfillmentData.qrCodeUrl}</p>
+                                </div>
+                              )}
+                              {selectedOrder.fulfillmentData.activationCode && (
+                                <div>
+                                  <label className="text-sm font-medium">Activation Code:</label>
+                                  <p className="text-sm font-mono bg-gray-100 p-1 rounded">{selectedOrder.fulfillmentData.activationCode}</p>
+                                </div>
+                              )}
+                              {selectedOrder.fulfillmentData.iccid && (
+                                <div>
+                                  <label className="text-sm font-medium">ICCID:</label>
+                                  <p className="text-sm font-mono bg-gray-100 p-1 rounded">{selectedOrder.fulfillmentData.iccid}</p>
+                                </div>
+                              )}
+                              {selectedOrder.fulfillmentData.pin && (
+                                <div>
+                                  <label className="text-sm font-medium">PIN/PUK:</label>
+                                  <p className="text-sm font-mono bg-gray-100 p-1 rounded">{selectedOrder.fulfillmentData.pin}</p>
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          {selectedOrder.category === 'rdp' && (
+                            <div className="grid grid-cols-2 gap-4">
+                              {selectedOrder.fulfillmentData.serverIp && (
+                                <div>
+                                  <label className="text-sm font-medium">Server IP:</label>
+                                  <p className="text-sm font-mono bg-gray-100 p-1 rounded">{selectedOrder.fulfillmentData.serverIp}</p>
+                                </div>
+                              )}
+                              {selectedOrder.fulfillmentData.rdpPort && (
+                                <div>
+                                  <label className="text-sm font-medium">RDP Port:</label>
+                                  <p className="text-sm font-mono bg-gray-100 p-1 rounded">{selectedOrder.fulfillmentData.rdpPort}</p>
+                                </div>
+                              )}
+                              {selectedOrder.fulfillmentData.username && (
+                                <div>
+                                  <label className="text-sm font-medium">Username:</label>
+                                  <p className="text-sm font-mono bg-gray-100 p-1 rounded">{selectedOrder.fulfillmentData.username}</p>
+                                </div>
+                              )}
+                              {selectedOrder.fulfillmentData.password && (
+                                <div>
+                                  <label className="text-sm font-medium">Password:</label>
+                                  <p className="text-sm font-mono bg-gray-100 p-1 rounded">{selectedOrder.fulfillmentData.password}</p>
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          {selectedOrder.category === 'proxy' && (
+                            <div className="grid grid-cols-2 gap-4">
+                              {selectedOrder.fulfillmentData.ipAddress && (
+                                <div>
+                                  <label className="text-sm font-medium">Proxy IP:</label>
+                                  <p className="text-sm font-mono bg-gray-100 p-1 rounded">{selectedOrder.fulfillmentData.ipAddress}</p>
+                                </div>
+                              )}
+                              {selectedOrder.fulfillmentData.port && (
+                                <div>
+                                  <label className="text-sm font-medium">Port:</label>
+                                  <p className="text-sm font-mono bg-gray-100 p-1 rounded">{selectedOrder.fulfillmentData.port}</p>
+                                </div>
+                              )}
+                              {selectedOrder.fulfillmentData.username && (
+                                <div>
+                                  <label className="text-sm font-medium">Username:</label>
+                                  <p className="text-sm font-mono bg-gray-100 p-1 rounded">{selectedOrder.fulfillmentData.username}</p>
+                                </div>
+                              )}
+                              {selectedOrder.fulfillmentData.password && (
+                                <div>
+                                  <label className="text-sm font-medium">Password:</label>
+                                  <p className="text-sm font-mono bg-gray-100 p-1 rounded">{selectedOrder.fulfillmentData.password}</p>
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          {selectedOrder.category === 'vpn' && (
+                            <div className="grid grid-cols-2 gap-4">
+                              {selectedOrder.fulfillmentData.username && (
+                                <div>
+                                  <label className="text-sm font-medium">VPN Username:</label>
+                                  <p className="text-sm font-mono bg-gray-100 p-1 rounded">{selectedOrder.fulfillmentData.username}</p>
+                                </div>
+                              )}
+                              {selectedOrder.fulfillmentData.password && (
+                                <div>
+                                  <label className="text-sm font-medium">VPN Password:</label>
+                                  <p className="text-sm font-mono bg-gray-100 p-1 rounded">{selectedOrder.fulfillmentData.password}</p>
+                                </div>
+                              )}
+                              {selectedOrder.fulfillmentData.serverAddress && (
+                                <div>
+                                  <label className="text-sm font-medium">Server Address:</label>
+                                  <p className="text-sm font-mono bg-gray-100 p-1 rounded">{selectedOrder.fulfillmentData.serverAddress}</p>
+                                </div>
+                              )}
+                              {selectedOrder.fulfillmentData.configFileUrl && (
+                                <div>
+                                  <label className="text-sm font-medium">Config File:</label>
+                                  <p className="text-sm text-blue-600 break-all">{selectedOrder.fulfillmentData.configFileUrl}</p>
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          {selectedOrder.fulfillmentData.instructions && (
+                            <div>
+                              <label className="text-sm font-medium">Setup Instructions:</label>
+                              <div className="text-sm p-3 bg-gray-50 rounded-md mt-1 whitespace-pre-wrap">
+                                {selectedOrder.fulfillmentData.instructions}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Raw JSON fallback */}
+                          <details className="mt-4">
+                            <summary className="text-sm font-medium cursor-pointer">View Raw Data</summary>
+                            <div className="text-xs p-3 bg-gray-50 rounded-md border mt-2 overflow-x-auto">
+                              <pre className="whitespace-pre-wrap">
+                                {JSON.stringify(selectedOrder.fulfillmentData, null, 2)}
+                              </pre>
+                            </div>
+                          </details>
                         </div>
                       </CardContent>
                     </Card>
@@ -1060,6 +1607,20 @@ export function OrdersManagement() {
                     <Edit className="h-4 w-4 mr-1" />
                     Edit Order
                   </Button>
+                  {selectedOrder.fulfillmentData && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setSelectedOrder(selectedOrder);
+                        setEditFulfillmentDialogOpen(true);
+                        setDetailsDialogOpen(false);
+                      }}
+                    >
+                      <Settings className="h-4 w-4 mr-1" />
+                      Edit Fulfillment
+                    </Button>
+                  )}
                   <Button
                     variant="outline"
                     size="sm"
@@ -1071,6 +1632,27 @@ export function OrdersManagement() {
                   >
                     <MessageSquare className="h-4 w-4 mr-1" />
                     Add Notes
+                  </Button>
+                  {/* Send Mail Button - Available for all orders */}
+                  <Button
+                    variant="default"
+                    size="sm"
+                    onClick={() => {
+                      openSimpleGmailCompose(
+                        selectedOrder.userEmail, 
+                        selectedOrder.orderNumber || selectedOrder.id.slice(-8), 
+                        selectedOrder.status, 
+                        selectedOrder.productName,
+                        selectedOrder.fulfillmentData
+                      );
+                      toast.success(`${selectedOrder.status} email opened in Gmail`);
+                    }}
+                    className="bg-blue-600 hover:bg-blue-700"
+                  >
+                    <svg className="h-4 w-4 mr-1" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/>
+                    </svg>
+                    Send {selectedOrder.status === 'pending' ? 'Confirmation' : selectedOrder.status === 'processing' ? 'Update' : 'Completion'} Email
                   </Button>
                 </>
               )}
@@ -1174,6 +1756,39 @@ export function OrdersManagement() {
             <Button
               variant="outline"
               onClick={() => setFulfillmentDialogOpen(false)}
+              disabled={actionLoading}
+            >
+              <X className="mr-2 h-4 w-4" />
+              Cancel
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Fulfillment Dialog */}
+      <Dialog open={editFulfillmentDialogOpen} onOpenChange={setEditFulfillmentDialogOpen}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Edit Fulfillment Data</DialogTitle>
+            <DialogDescription>
+              Update the fulfillment data for order {selectedOrder?.orderNumber}
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="py-4 max-h-[70vh] overflow-y-auto">
+            {selectedOrder && (
+              <EditFulfillmentForm
+                order={selectedOrder}
+                onSubmit={handleUpdateFulfillment}
+                loading={actionLoading}
+              />
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setEditFulfillmentDialogOpen(false)}
               disabled={actionLoading}
             >
               <X className="mr-2 h-4 w-4" />
