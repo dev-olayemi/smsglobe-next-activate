@@ -18,7 +18,7 @@ import { db } from '@/lib/firebase';
 export interface UserNotification {
   id: string;
   userId: string;
-  type: 'order_completed' | 'order_processing' | 'payment_confirmed' | 'system_message';
+  type: 'order_placed' | 'order_completed' | 'order_processing' | 'payment_confirmed' | 'refund_available' | 'system_message';
   title: string;
   message: string;
   data?: any;
@@ -71,7 +71,53 @@ class UserNotificationService {
     }
   }
 
-  // Notify user when order starts processing
+  // Notify user when order is placed
+  async notifyOrderPlaced(userId: string, orderId: string, orderNumber: string, productName: string, category: string): Promise<void> {
+    try {
+      await this.createNotification({
+        userId,
+        type: 'order_placed' as any,
+        title: '📦 Order Placed Successfully!',
+        message: `Your ${category.toUpperCase()} order "${productName}" has been placed and is being reviewed. You'll receive updates as we process your order.`,
+        orderId,
+        orderNumber,
+        data: {
+          orderId,
+          orderNumber,
+          productName,
+          category,
+          action: 'view_order'
+        }
+      });
+      
+      console.log(`Order placement notification sent to user ${userId} for order ${orderNumber}`);
+    } catch (error) {
+      console.error('Error sending order placement notification:', error);
+    }
+  }
+
+  // Notify user when payment is confirmed
+  async notifyPaymentConfirmed(userId: string, orderId: string, orderNumber: string, productName: string, amount: number): Promise<void> {
+    try {
+      await this.createNotification({
+        userId,
+        type: 'payment_confirmed',
+        title: '💰 Payment Confirmed!',
+        message: `Payment of $${amount.toFixed(2)} for "${productName}" has been confirmed. Your order is now being processed.`,
+        orderId,
+        orderNumber,
+        data: {
+          orderId,
+          orderNumber,
+          productName,
+          amount,
+          action: 'view_order'
+        }
+      });
+    } catch (error) {
+      console.error('Error sending payment confirmation notification:', error);
+    }
+  }
   async notifyOrderProcessing(userId: string, orderId: string, orderNumber: string, productName: string): Promise<void> {
     try {
       await this.createNotification({
@@ -126,7 +172,59 @@ class UserNotificationService {
     }
   }
 
-  // Mark all user notifications as read
+  // Accept refund and update user balance
+  async acceptRefund(userId: string, orderId: string, refundAmount: number): Promise<{ success: boolean; error?: string }> {
+    try {
+      const { firestoreService } = await import('@/lib/firestore-service');
+      
+      // Get current user profile
+      const profile = await firestoreService.getUserProfile(userId);
+      if (!profile) {
+        return { success: false, error: 'User profile not found' };
+      }
+
+      // Calculate new balance
+      const newBalance = (profile.balance || 0) + refundAmount;
+
+      // Update user balance
+      await firestoreService.updateUserBalance(userId, newBalance);
+
+      // Add refund transaction
+      await firestoreService.addBalanceTransaction({
+        userId,
+        type: 'refund',
+        amount: refundAmount,
+        description: `Refund accepted for order ${orderId}`,
+        balanceAfter: newBalance
+      });
+
+      // Update order status to prevent multiple refunds
+      const { doc, updateDoc, serverTimestamp } = await import('firebase/firestore');
+      const { db } = await import('@/lib/firebase');
+      
+      await updateDoc(doc(db, 'product_orders', orderId), {
+        refundAccepted: true,
+        refundAcceptedAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
+
+      // Trigger real-time balance update in UI
+      try {
+        window.dispatchEvent(new CustomEvent('balanceUpdated', { 
+          detail: { newBalance, increase: refundAmount } 
+        }));
+        console.log(`✅ Refund balance update event dispatched: ${newBalance}`);
+      } catch (eventError) {
+        console.warn('Failed to dispatch refund balance update event:', eventError);
+      }
+
+      console.log(`Refund accepted: $${refundAmount} added to user ${userId} balance`);
+      return { success: true };
+    } catch (error) {
+      console.error('Error accepting refund:', error);
+      return { success: false, error: 'Failed to process refund acceptance' };
+    }
+  }
   async markAllAsRead(userId: string): Promise<void> {
     try {
       const q = query(

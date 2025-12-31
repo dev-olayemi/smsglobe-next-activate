@@ -4,11 +4,22 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Bell, BellRing, Check, Package, Clock } from 'lucide-react';
+import { Bell, BellRing, Check } from 'lucide-react';
 import { userNotificationService, UserNotification } from '@/lib/user-notification-service';
-import { formatDistanceToNow } from 'date-fns';
 import { useAuth } from '@/lib/auth-context';
 import { useNavigate } from 'react-router-dom';
+
+// Helper function to format time ago
+const formatTimeAgo = (date: Date): string => {
+  const now = new Date();
+  const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+  
+  if (diffInSeconds < 60) return 'Just now';
+  if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)}m ago`;
+  if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)}h ago`;
+  if (diffInSeconds < 604800) return `${Math.floor(diffInSeconds / 86400)}d ago`;
+  return date.toLocaleDateString();
+};
 
 export function UserNotifications() {
   const { user } = useAuth();
@@ -41,6 +52,31 @@ export function UserNotifications() {
     if (notification.data?.action === 'view_order' && notification.orderId) {
       navigate('/orders');
       setIsOpen(false);
+    } else if (notification.data?.action === 'accept_refund') {
+      // Handle refund acceptance
+      await handleRefundAcceptance(notification);
+    }
+  };
+
+  const handleRefundAcceptance = async (notification: UserNotification) => {
+    if (!user || !notification.data?.refundAmount) return;
+    
+    try {
+      const result = await userNotificationService.acceptRefund(
+        user.uid,
+        notification.orderId!,
+        notification.data.refundAmount
+      );
+      
+      if (result.success) {
+        // Show success message and navigate to orders
+        navigate('/orders');
+        setIsOpen(false);
+      } else {
+        console.error('Failed to accept refund:', result.error);
+      }
+    } catch (error) {
+      console.error('Error accepting refund:', error);
     }
   };
 
@@ -51,18 +87,22 @@ export function UserNotifications() {
 
   const getNotificationIcon = (type: string) => {
     switch (type) {
+      case 'order_placed': return '📦';
       case 'order_completed': return '🎉';
       case 'order_processing': return '⏳';
       case 'payment_confirmed': return '💰';
+      case 'refund_available': return '💸';
       default: return '📢';
     }
   };
 
   const getNotificationColor = (type: string) => {
     switch (type) {
+      case 'order_placed': return 'bg-blue-50 border-blue-200';
       case 'order_completed': return 'bg-green-50 border-green-200';
-      case 'order_processing': return 'bg-blue-50 border-blue-200';
-      case 'payment_confirmed': return 'bg-yellow-50 border-yellow-200';
+      case 'order_processing': return 'bg-yellow-50 border-yellow-200';
+      case 'payment_confirmed': return 'bg-purple-50 border-purple-200';
+      case 'refund_available': return 'bg-orange-50 border-orange-200';
       default: return 'bg-gray-50 border-gray-200';
     }
   };
@@ -125,7 +165,7 @@ export function UserNotifications() {
                       className={`p-4 hover:bg-gray-50 cursor-pointer transition-colors ${
                         !notification.isRead ? getNotificationColor(notification.type) : ''
                       }`}
-                      onClick={() => handleNotificationClick(notification)}
+                      onClick={() => notification.data?.action !== 'accept_refund' ? handleNotificationClick(notification) : undefined}
                     >
                       <div className="flex items-start gap-3">
                         <div className="text-lg mt-0.5">
@@ -145,7 +185,7 @@ export function UserNotifications() {
                           </p>
                           <div className="flex items-center justify-between mt-2">
                             <p className="text-xs text-gray-400">
-                              {formatDistanceToNow(notification.createdAt, { addSuffix: true })}
+                              {formatTimeAgo(notification.createdAt)}
                             </p>
                             {notification.orderNumber && (
                               <Badge variant="outline" className="text-xs">
@@ -153,6 +193,20 @@ export function UserNotifications() {
                               </Badge>
                             )}
                           </div>
+                          {notification.data?.action === 'accept_refund' && (
+                            <div className="mt-3 pt-2 border-t">
+                              <Button 
+                                size="sm" 
+                                className="w-full bg-green-600 hover:bg-green-700"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleRefundAcceptance(notification);
+                                }}
+                              >
+                                Accept Refund ${notification.data.refundAmount?.toFixed(2)}
+                              </Button>
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>

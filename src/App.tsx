@@ -34,6 +34,7 @@ import GiftTracking from "./pages/GiftTracking";
 import MyOrders from "./pages/MyOrders";
 import CustomGiftRequest from "./pages/CustomGiftRequest";
 import Support from "./pages/Support";
+import NotificationsPage from "./pages/Notifications";
 import PaviorWidget from "./components/PaviorWidget";
 import { AdminApp } from "./admin-panel/AdminApp";
 
@@ -76,6 +77,7 @@ const App = () => (
             <Route path="/provider/:provider" element={<ProviderProducts />} />
             <Route path="/product/:slug" element={<ProductDetail />} />
             <Route path="/orders" element={<Orders />} />
+            <Route path="/notifications" element={<NotificationsPage />} />
             <Route path="/top-up" element={<TopUp />} />
             <Route path="/profile" element={<Profile />} />
             <Route path="/transactions" element={<Transactions />} />

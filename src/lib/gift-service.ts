@@ -847,6 +847,29 @@ class GiftService {
       const orderRef = doc(db, 'gift_orders', orderId);
       await updateDoc(orderRef, updateData);
       
+      // Send payment confirmation notification
+      if (paymentStatus === 'completed' && orderStatus === 'confirmed') {
+        try {
+          const orderDoc = await getDoc(orderRef);
+          if (orderDoc.exists()) {
+            const orderData = orderDoc.data();
+            const { userNotificationService } = await import('./user-notification-service');
+            
+            await userNotificationService.notifyPaymentConfirmed(
+              orderData.userId,
+              orderId,
+              orderData.orderNumber || orderId,
+              orderData.giftTitle || 'Gift Order',
+              orderData.totalAmount || 0
+            );
+            console.log(`Payment confirmation notification sent for gift order ${orderId}`);
+          }
+        } catch (notificationError) {
+          console.error('Failed to send payment confirmation notification:', notificationError);
+          // Don't fail the payment update if notification fails
+        }
+      }
+      
       console.log(`✅ Updated order ${orderId} payment status to ${paymentStatus}`);
       return true;
     } catch (error) {

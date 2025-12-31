@@ -276,6 +276,11 @@ class AdminService {
       
       const orderData = orderDoc.data() as ProductOrder;
       
+      // Prevent setting to refunded if refund was already accepted
+      if (status === 'refunded' && orderData.refundAccepted) {
+        throw new Error('Cannot refund order - refund has already been accepted by user');
+      }
+      
       const updates: any = {
         status,
         updatedAt: serverTimestamp()
@@ -288,26 +293,89 @@ class AdminService {
       // Update the order
       await updateDoc(doc(db, 'product_orders', orderId), updates);
       
-      // Send user notification for status changes
+      // Send user notification for all status changes
       try {
-        if (status === 'processing') {
-          await userNotificationService.notifyOrderProcessing(
-            orderData.userId,
-            orderId,
-            orderData.orderNumber || orderId,
-            orderData.productName || 'Product'
-          );
-          console.log(`User notification sent for processing order ${orderId}`);
-        } else if (status === 'completed') {
-          await userNotificationService.notifyOrderCompleted(
-            orderData.userId,
-            orderId,
-            orderData.orderNumber || orderId,
-            orderData.productName || 'Product',
-            orderData.category || 'service'
-          );
-          console.log(`User notification sent for completed order ${orderId}`);
+        const orderNumber = orderData.orderNumber || orderId;
+        const productName = orderData.productName || 'Product';
+        const category = orderData.category || 'service';
+        
+        switch (status) {
+          case 'pending':
+            await userNotificationService.createNotification({
+              userId: orderData.userId,
+              type: 'order_processing' as any,
+              title: '⏳ Order Under Review',
+              message: `Your ${category.toUpperCase()} order "${productName}" is being reviewed by our team. We'll update you soon!`,
+              orderId,
+              orderNumber,
+              data: {
+                orderId,
+                orderNumber,
+                productName,
+                category,
+                action: 'view_order'
+              }
+            });
+            break;
+            
+          case 'processing':
+            await userNotificationService.notifyOrderProcessing(
+              orderData.userId,
+              orderId,
+              orderNumber,
+              productName
+            );
+            break;
+            
+          case 'completed':
+            await userNotificationService.notifyOrderCompleted(
+              orderData.userId,
+              orderId,
+              orderNumber,
+              productName,
+              category
+            );
+            break;
+            
+          case 'cancelled':
+            await userNotificationService.createNotification({
+              userId: orderData.userId,
+              type: 'system_message' as any,
+              title: '❌ Order Cancelled',
+              message: `Your ${category.toUpperCase()} order "${productName}" has been cancelled. If you have questions, please contact support.`,
+              orderId,
+              orderNumber,
+              data: {
+                orderId,
+                orderNumber,
+                productName,
+                category,
+                action: 'view_order'
+              }
+            });
+            break;
+            
+          case 'refunded':
+            await userNotificationService.createNotification({
+              userId: orderData.userId,
+              type: 'refund_available' as any,
+              title: '💸 Refund Available',
+              message: `Your order "${productName}" has been refunded by admin. Click to accept your refund of $${orderData.price || orderData.amount || 0}.`,
+              orderId,
+              orderNumber,
+              data: {
+                orderId,
+                orderNumber,
+                productName,
+                category,
+                refundAmount: orderData.price || orderData.amount || 0,
+                action: 'accept_refund'
+              }
+            });
+            break;
         }
+        
+        console.log(`User notification sent for ${status} order ${orderId}`);
       } catch (notificationError) {
         console.error('Failed to send user notification:', notificationError);
         // Don't fail the whole operation if notification fails

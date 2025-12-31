@@ -116,6 +116,10 @@ export interface ProductOrder {
   price: number;
   status: 'pending' | 'processing' | 'completed' | 'cancelled' | 'refunded';
   
+  // Refund tracking
+  refundAccepted?: boolean;
+  refundAcceptedAt?: Date;
+  
   // Customer request details
   requestDetails?: {
     location?: string;
@@ -615,7 +619,25 @@ export const firestoreService = {
     }
     
     const docRef = await addDoc(colRef, cleanOrder);
-    return docRef.id;
+    const orderId = docRef.id;
+    
+    // Send notification for order placement
+    try {
+      const { userNotificationService } = await import('@/lib/user-notification-service');
+      await userNotificationService.notifyOrderPlaced(
+        order.userId,
+        orderId,
+        orderId, // Using orderId as orderNumber for now
+        order.productName,
+        order.category
+      );
+      console.log(`Order placement notification sent for order ${orderId}`);
+    } catch (notificationError) {
+      console.error('Failed to send order placement notification:', notificationError);
+      // Don't fail the order creation if notification fails
+    }
+    
+    return orderId;
   },
 
   async getUserProductOrders(userId: string): Promise<ProductOrder[]> {
@@ -801,6 +823,33 @@ export const firestoreService = {
       
       await this.addBalanceTransaction(transactionData);
       console.log(`✅ Transaction recorded: -$${product.price}`);
+      
+      // Send payment confirmation notification
+      try {
+        const { userNotificationService } = await import('./user-notification-service');
+        await userNotificationService.notifyPaymentConfirmed(
+          userId,
+          orderId,
+          orderId, // Using orderId as orderNumber for now
+          product.name,
+          product.price
+        );
+        console.log(`Payment confirmation notification sent for order ${orderId}`);
+      } catch (notificationError) {
+        console.error('Failed to send payment confirmation notification:', notificationError);
+        // Don't fail the purchase if notification fails
+      }
+      
+      // Trigger real-time balance update in UI
+      try {
+        // Dispatch custom event for balance update
+        window.dispatchEvent(new CustomEvent('balanceUpdated', { 
+          detail: { newBalance, deduction: product.price } 
+        }));
+        console.log(`✅ Balance update event dispatched: ${newBalance}`);
+      } catch (eventError) {
+        console.warn('Failed to dispatch balance update event:', eventError);
+      }
       
       // Step 4: Update user_balances collection (optional - can fail)
       try {

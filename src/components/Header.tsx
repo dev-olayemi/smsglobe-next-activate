@@ -5,11 +5,13 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/lib/auth-context";
 import { useEffect, useState } from "react";
 import logo from "/favicon.png";
-import { Menu, Wallet, Home, ShoppingBag, Receipt, Shield, CreditCard, Settings, User, Crown, LogOut, DollarSign, MessageSquare, ChevronDown, Monitor, Gift } from "lucide-react";
-import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
+import { Menu, Wallet, Home, ShoppingBag, Receipt, Shield, CreditCard, Settings, User, Crown, LogOut, DollarSign, MessageSquare, ChevronDown, Monitor, Gift, Bell } from "lucide-react";
+import { Sheet, SheetContent, SheetTrigger, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import { UserNotifications } from "@/components/UserNotifications";
+import { Badge } from "@/components/ui/badge";
+import { userNotificationService } from "@/lib/user-notification-service";
 
 
 
@@ -18,6 +20,47 @@ export const Header = () => {
   const location = useLocation();
   const { user, profile, signOut } = useAuth();
   const [isAdmin, setIsAdmin] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [displayBalance, setDisplayBalance] = useState<number>(0);
+  const [balanceAnimation, setBalanceAnimation] = useState<'none' | 'decrease' | 'increase'>('none');
+
+  useEffect(() => {
+    if (profile?.balance !== undefined) {
+      setDisplayBalance(profile.balance);
+    }
+  }, [profile?.balance]);
+
+  // Listen for real-time balance updates
+  useEffect(() => {
+    const handleBalanceUpdate = (event: CustomEvent) => {
+      const { newBalance, deduction, increase } = event.detail;
+      
+      if (deduction) {
+        // Show decrease animation
+        setBalanceAnimation('decrease');
+        setTimeout(() => {
+          setDisplayBalance(newBalance);
+          setTimeout(() => setBalanceAnimation('none'), 500);
+        }, 200);
+      } else if (increase) {
+        // Show increase animation
+        setBalanceAnimation('increase');
+        setTimeout(() => {
+          setDisplayBalance(newBalance);
+          setTimeout(() => setBalanceAnimation('none'), 500);
+        }, 200);
+      } else {
+        // Direct update without animation
+        setDisplayBalance(newBalance);
+      }
+    };
+
+    window.addEventListener('balanceUpdated', handleBalanceUpdate as EventListener);
+    
+    return () => {
+      window.removeEventListener('balanceUpdated', handleBalanceUpdate as EventListener);
+    };
+  }, []);
 
   useEffect(() => {
     if (profile) {
@@ -26,6 +69,21 @@ export const Header = () => {
       setIsAdmin(isUserAdmin);
     }
   }, [profile, user]);
+
+  // Subscribe to notifications for unread count
+  useEffect(() => {
+    if (!user) return;
+
+    const unsubscribe = userNotificationService.subscribeToUserNotifications(
+      user.uid,
+      (notifications) => {
+        const unread = notifications.filter(n => !n.isRead).length;
+        setUnreadCount(unread);
+      }
+    );
+
+    return unsubscribe;
+  }, [user]);
 
   const handleLogout = async () => {
     await signOut();
@@ -51,6 +109,7 @@ export const Header = () => {
     { to: "/sms", label: "SMS", icon: MessageSquare },
     { to: "/orders", label: "Orders", icon: ShoppingBag },
     { to: "/my-orders", label: "My Gift Orders", icon: Gift },
+    { to: "/notifications", label: "Notifications", icon: Bell, badge: unreadCount },
     { to: "/transactions", label: "Transactions", icon: Receipt },
     { to: "/vpn-and-proxy", label: "Proxy", icon: Shield },
     { to: "/esim", label: "eSIMs", icon: CreditCard },
@@ -68,8 +127,11 @@ export const Header = () => {
       {/* Compact Balance with USD Icon */}
       <div className="flex items-center gap-1.5 bg-muted/60 px-3 py-1.5 rounded-full text-sm">
         <DollarSign className="h-4 w-4 text-primary" />
-        <span className="font-bold">
-          {profile?.balance !== undefined ? Number(profile.balance).toFixed(2) : "0.00"}
+        <span className={`font-bold transition-all duration-300 ${
+          balanceAnimation === 'decrease' ? 'text-red-600 scale-95' : 
+          balanceAnimation === 'increase' ? 'text-green-600 scale-105' : ''
+        }`}>
+          {displayBalance.toFixed(2)}
         </span>
         <span className="text-xs text-muted-foreground">USD</span>
       </div>
@@ -131,10 +193,16 @@ export const Header = () => {
               <Button variant="outline" size="sm" asChild>
                 <Link to="/top-up">Top Up</Link>
               </Button>
-              <div className="flex items-center gap-1 bg-muted/50 px-2 py-1 rounded-md">
+              <div className={`flex items-center gap-1 bg-muted/50 px-2 py-1 rounded-md transition-all duration-300 ${
+                balanceAnimation === 'decrease' ? 'bg-red-50 border border-red-200' : 
+                balanceAnimation === 'increase' ? 'bg-green-50 border border-green-200' : ''
+              }`}>
                 <Wallet className="h-4 w-4 text-primary" />
-                <span className="text-sm font-bold">
-                  ${profile?.balance !== undefined ? Number(profile.balance).toFixed(2) : "0.00"} USD
+                <span className={`text-sm font-bold transition-all duration-300 ${
+                  balanceAnimation === 'decrease' ? 'text-red-600 scale-95' : 
+                  balanceAnimation === 'increase' ? 'text-green-600 scale-105' : ''
+                }`}>
+                  ${displayBalance.toFixed(2)} USD
                 </span>
               </div>
               <UserNotifications />
@@ -242,8 +310,11 @@ export const Header = () => {
                       </Avatar>
                       <div className="min-w-0 flex-1">
                         <p className="text-xs text-muted-foreground">Account Balance</p>
-                        <p className="text-lg font-bold truncate">
-                          ${profile?.balance !== undefined ? Number(profile.balance).toFixed(2) : "0.00"} USD
+                        <p className={`text-lg font-bold truncate transition-all duration-300 ${
+                          balanceAnimation === 'decrease' ? 'text-red-600 scale-95' : 
+                          balanceAnimation === 'increase' ? 'text-green-600 scale-105' : ''
+                        }`}>
+                          ${displayBalance.toFixed(2)} USD
                         </p>
                       </div>
                     </div>
@@ -267,6 +338,11 @@ export const Header = () => {
                         >
                           {Icon && <Icon className="h-4 w-4 flex-shrink-0" />}
                           <span className="truncate">{item.label}</span>
+                          {(item as any).badge > 0 && (
+                            <Badge variant="destructive" className="ml-auto h-5 w-5 flex items-center justify-center p-0 text-xs">
+                              {(item as any).badge > 99 ? '99+' : (item as any).badge}
+                            </Badge>
+                          )}
                         </Link>
                       );
                     })}

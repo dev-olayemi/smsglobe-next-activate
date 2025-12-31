@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Loader2, Gift, Package, Search, Edit, Eye, CheckCircle, XCircle, Clock, DollarSign, User, Phone, MapPin, MessageSquare } from 'lucide-react';
+import { Loader2, Gift, Package, Search, Edit, Eye, CheckCircle, XCircle, Clock, DollarSign, User, MapPin } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatStatsAmount } from '../lib/currency-utils';
 
@@ -242,22 +242,22 @@ export function GiftsManagement() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
+    <div className="space-y-4 sm:space-y-6 p-4 sm:p-6">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-bold">Gifts Management</h1>
-          <p className="text-muted-foreground">Manage gift orders, catalog, and custom requests</p>
+          <h1 className="text-2xl sm:text-3xl font-bold">Gifts Management</h1>
+          <p className="text-sm sm:text-base text-muted-foreground">Manage gift orders, catalog, and custom requests</p>
         </div>
-        <Button onClick={loadAllData} variant="outline">
+        <Button onClick={loadAllData} variant="outline" className="w-full sm:w-auto">
           Refresh
         </Button>
       </div>
 
       {/* Search */}
       <Card>
-        <CardHeader>
-          <CardTitle>Search</CardTitle>
-          <CardDescription>Search across all gift data</CardDescription>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-lg sm:text-xl">Search</CardTitle>
+          <CardDescription className="text-sm">Search across all gift data</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-2 sm:space-y-0 sm:space-x-2">
@@ -276,20 +276,165 @@ export function GiftsManagement() {
 
       {/* Tabs */}
       <Card>
-        <CardHeader>
-          <CardTitle>Gift Management</CardTitle>
-          <CardDescription>Manage different aspects of the gift system</CardDescription>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-lg sm:text-xl">Gift Management</CardTitle>
+          <CardDescription className="text-sm">Manage different aspects of the gift system</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-0 sm:p-6">
           <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="grid w-full grid-cols-3">
-              <TabsTrigger value="orders">Gift Orders ({giftOrders.length})</TabsTrigger>
-              <TabsTrigger value="catalog">Gift Catalog ({giftCatalog.length})</TabsTrigger>
-              <TabsTrigger value="requests">Custom Requests ({customRequests.length})</TabsTrigger>
-            </TabsList>
+            <div className="px-4 sm:px-0">
+              <TabsList className="grid w-full grid-cols-3 mb-4">
+                <TabsTrigger value="orders" className="text-xs sm:text-sm">
+                  <span className="hidden sm:inline">Gift Orders</span>
+                  <span className="sm:hidden">Orders</span>
+                  <span className="ml-1">({giftOrders.length})</span>
+                </TabsTrigger>
+                <TabsTrigger value="catalog" className="text-xs sm:text-sm">
+                  <span className="hidden sm:inline">Gift Catalog</span>
+                  <span className="sm:hidden">Catalog</span>
+                  <span className="ml-1">({giftCatalog.length})</span>
+                </TabsTrigger>
+                <TabsTrigger value="requests" className="text-xs sm:text-sm">
+                  <span className="hidden sm:inline">Custom Requests</span>
+                  <span className="sm:hidden">Requests</span>
+                  <span className="ml-1">({customRequests.length})</span>
+                </TabsTrigger>
+              </TabsList>
+            </div>
             
-            <TabsContent value={activeTab} className="mt-4">
-              <div className="rounded-md border">
+            <TabsContent value={activeTab} className="mt-0">
+              {/* Mobile Card View */}
+              <div className="block sm:hidden space-y-3 px-4">
+                {filteredData.length === 0 ? (
+                  <div className="text-center py-8">
+                    <div className="flex flex-col items-center gap-2">
+                      <Package className="h-12 w-12 text-muted-foreground" />
+                      <p className="text-muted-foreground">No data found</p>
+                      <p className="text-sm text-muted-foreground">
+                        {searchTerm ? `No results for "${searchTerm}"` : `No ${activeTab} available`}
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  filteredData.map((item, index) => (
+                    <Card key={item.id || index} className="p-4">
+                      <div className="space-y-3">
+                        <div className="flex items-start justify-between">
+                          <div className="flex items-center space-x-3 flex-1 min-w-0">
+                            <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                              <Gift className="h-5 w-5 text-blue-600" />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="font-medium text-sm truncate">
+                                {activeTab === 'orders' && item.orderNumber}
+                                {activeTab === 'catalog' && item.title}
+                                {activeTab === 'requests' && item.title}
+                              </div>
+                              <div className="text-xs text-muted-foreground truncate">
+                                {activeTab === 'orders' && item.giftTitle}
+                                {activeTab === 'catalog' && item.description?.substring(0, 50)}
+                                {activeTab === 'requests' && item.description?.substring(0, 50)}
+                              </div>
+                            </div>
+                          </div>
+                          <Badge variant={
+                            activeTab === 'orders' ? (
+                              item.status === 'delivered' ? 'default' :
+                              item.status === 'shipped' ? 'secondary' :
+                              item.status === 'processing' ? 'outline' :
+                              item.status === 'cancelled' ? 'destructive' : 'outline'
+                            ) : activeTab === 'catalog' ? (
+                              item.isActive ? 'default' : 'secondary'
+                            ) : (
+                              item.status === 'completed' ? 'default' :
+                              item.status === 'approved' ? 'secondary' :
+                              item.status === 'rejected' ? 'destructive' : 'outline'
+                            )
+                          } className="text-xs">
+                            {activeTab === 'orders' && (item.status?.replace('_', ' ').toUpperCase() || 'PENDING')}
+                            {activeTab === 'catalog' && (item.isActive ? 'Active' : 'Inactive')}
+                            {activeTab === 'requests' && (item.status?.toUpperCase() || 'PENDING')}
+                          </Badge>
+                        </div>
+                        
+                        <div className="grid grid-cols-2 gap-3 text-xs">
+                          <div>
+                            <span className="text-muted-foreground">
+                              {activeTab === 'orders' && 'Sender:'}
+                              {activeTab === 'catalog' && 'Price:'}
+                              {activeTab === 'requests' && 'Budget:'}
+                            </span>
+                            <div className="font-medium">
+                              {activeTab === 'orders' && item.senderName}
+                              {activeTab === 'catalog' && formatStatsAmount(item.basePrice || 0).primary}
+                              {activeTab === 'requests' && `${formatStatsAmount(item.budgetMin || 0).primary} - ${formatStatsAmount(item.budgetMax || 0).primary}`}
+                            </div>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground">
+                              {activeTab === 'orders' && 'Amount:'}
+                              {activeTab === 'catalog' && 'Category:'}
+                              {activeTab === 'requests' && 'Location:'}
+                            </span>
+                            <div className="font-medium">
+                              {activeTab === 'orders' && formatStatsAmount(item.totalAmount || 0).primary}
+                              {activeTab === 'catalog' && (item.categoryId || 'General')}
+                              {activeTab === 'requests' && `${item.deliveryCountry}, ${item.deliveryCity}`}
+                            </div>
+                          </div>
+                        </div>
+                        
+                        <div className="flex items-center justify-between pt-2 border-t">
+                          <Button size="sm" variant="outline" onClick={() => openDetailsDialog(item)} className="text-xs">
+                            <Eye className="h-3 w-3 mr-1" />
+                            View
+                          </Button>
+                          
+                          <div className="flex gap-2">
+                            {activeTab === 'orders' && (
+                              <>
+                                {item.status === 'confirmed' && (
+                                  <Button size="sm" variant="default" onClick={() => handleAcceptOrder(item)} className="text-xs">
+                                    <CheckCircle className="h-3 w-3 mr-1" />
+                                    Accept
+                                  </Button>
+                                )}
+                                {item.status === 'processing' && (
+                                  <Button size="sm" variant="secondary" onClick={() => openFulfillmentDialog(item)} className="text-xs">
+                                    <Package className="h-3 w-3 mr-1" />
+                                    Fulfill
+                                  </Button>
+                                )}
+                              </>
+                            )}
+                            
+                            {activeTab === 'requests' && item.status === 'pending' && (
+                              <>
+                                <Button size="sm" variant="default" onClick={() => openOfferDialog(item)} className="text-xs">
+                                  <DollarSign className="h-3 w-3 mr-1" />
+                                  Offer
+                                </Button>
+                                <Button size="sm" variant="destructive" onClick={() => handleRejectRequest(item)} className="text-xs">
+                                  <XCircle className="h-3 w-3" />
+                                </Button>
+                              </>
+                            )}
+                            
+                            {activeTab === 'catalog' && (
+                              <Button size="sm" variant="outline" className="text-xs">
+                                <Edit className="h-3 w-3" />
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </Card>
+                  ))
+                )}
+              </div>
+
+              {/* Desktop Table View */}
+              <div className="hidden sm:block rounded-md border">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -496,14 +641,14 @@ export function GiftsManagement() {
 
       {/* Details Dialog */}
       <Dialog open={detailsDialogOpen} onOpenChange={setDetailsDialogOpen}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto mx-4">
           <DialogHeader>
-            <DialogTitle>
+            <DialogTitle className="text-lg sm:text-xl">
               {activeTab === 'orders' && 'Gift Order Details'}
               {activeTab === 'catalog' && 'Gift Catalog Item Details'}
               {activeTab === 'requests' && 'Custom Gift Request Details'}
             </DialogTitle>
-            <DialogDescription>
+            <DialogDescription className="text-sm">
               Complete information about this {activeTab.slice(0, -1)}
             </DialogDescription>
           </DialogHeader>
@@ -514,11 +659,11 @@ export function GiftsManagement() {
               {activeTab === 'orders' && (
                 <div className="grid gap-6">
                   {/* Order Information */}
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                     <Card>
                       <CardHeader>
-                        <CardTitle className="text-lg flex items-center gap-2">
-                          <Package className="h-5 w-5" />
+                        <CardTitle className="text-base sm:text-lg flex items-center gap-2">
+                          <Package className="h-4 w-4 sm:h-5 sm:w-5" />
                           Order Information
                         </CardTitle>
                       </CardHeader>
@@ -571,8 +716,8 @@ export function GiftsManagement() {
 
                     <Card>
                       <CardHeader>
-                        <CardTitle className="text-lg flex items-center gap-2">
-                          <DollarSign className="h-5 w-5" />
+                        <CardTitle className="text-base sm:text-lg flex items-center gap-2">
+                          <DollarSign className="h-4 w-4 sm:h-5 sm:w-5" />
                           Pricing Details
                         </CardTitle>
                       </CardHeader>
@@ -601,11 +746,11 @@ export function GiftsManagement() {
                   </div>
 
                   {/* Sender and Recipient Information */}
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                     <Card>
                       <CardHeader>
-                        <CardTitle className="text-lg flex items-center gap-2">
-                          <User className="h-5 w-5" />
+                        <CardTitle className="text-base sm:text-lg flex items-center gap-2">
+                          <User className="h-4 w-4 sm:h-5 sm:w-5" />
                           Sender Information
                         </CardTitle>
                       </CardHeader>
@@ -639,8 +784,8 @@ export function GiftsManagement() {
 
                     <Card>
                       <CardHeader>
-                        <CardTitle className="text-lg flex items-center gap-2">
-                          <MapPin className="h-5 w-5" />
+                        <CardTitle className="text-base sm:text-lg flex items-center gap-2">
+                          <MapPin className="h-4 w-4 sm:h-5 sm:w-5" />
                           Recipient Information
                         </CardTitle>
                       </CardHeader>
@@ -686,12 +831,12 @@ export function GiftsManagement() {
                   {/* Delivery Information */}
                   <Card>
                     <CardHeader>
-                      <CardTitle className="text-lg flex items-center gap-2">
-                        <Clock className="h-5 w-5" />
+                      <CardTitle className="text-base sm:text-lg flex items-center gap-2">
+                        <Clock className="h-4 w-4 sm:h-5 sm:w-5" />
                         Delivery & Tracking Information
                       </CardTitle>
                     </CardHeader>
-                    <CardContent className="grid grid-cols-3 gap-4">
+                    <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                       <div>
                         <Label className="text-sm font-medium">Target Delivery</Label>
                         <p className="text-sm">{selectedItem.targetDeliveryDate || 'N/A'}</p>
@@ -719,13 +864,13 @@ export function GiftsManagement() {
                         </div>
                       )}
                       {selectedItem.deliveryInstructions && (
-                        <div className="col-span-3">
+                        <div className="col-span-full">
                           <Label className="text-sm font-medium">Delivery Instructions</Label>
                           <p className="text-sm bg-muted p-2 rounded">{selectedItem.deliveryInstructions}</p>
                         </div>
                       )}
                       {selectedItem.adminNotes && (
-                        <div className="col-span-3">
+                        <div className="col-span-full">
                           <Label className="text-sm font-medium">Admin Notes</Label>
                           <p className="text-sm bg-blue-50 p-2 rounded border-l-4 border-blue-400">{selectedItem.adminNotes}</p>
                         </div>
@@ -737,10 +882,10 @@ export function GiftsManagement() {
                   {selectedItem.giftImages && selectedItem.giftImages.length > 0 && (
                     <Card>
                       <CardHeader>
-                        <CardTitle className="text-lg">Gift Images</CardTitle>
+                        <CardTitle className="text-base sm:text-lg">Gift Images</CardTitle>
                       </CardHeader>
                       <CardContent>
-                        <div className="grid grid-cols-4 gap-4">
+                        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
                           {selectedItem.giftImages.map((image: string, index: number) => (
                             <img
                               key={index}
@@ -1001,10 +1146,10 @@ export function GiftsManagement() {
 
       {/* Fulfillment Dialog */}
       <Dialog open={fulfillmentDialogOpen} onOpenChange={setFulfillmentDialogOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-2xl mx-4">
           <DialogHeader>
-            <DialogTitle>Fulfill Order</DialogTitle>
-            <DialogDescription>
+            <DialogTitle className="text-lg sm:text-xl">Fulfill Order</DialogTitle>
+            <DialogDescription className="text-sm">
               Add or update tracking information and mark order as shipped
             </DialogDescription>
           </DialogHeader>
@@ -1031,7 +1176,7 @@ export function GiftsManagement() {
           )}
           
           <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="trackingNumber">Tracking Number *</Label>
                 <div className="flex gap-2">
@@ -1046,6 +1191,7 @@ export function GiftsManagement() {
                     variant="outline"
                     size="sm"
                     onClick={() => setFulfillmentData({ ...fulfillmentData, trackingNumber: generateTrackingNumber() })}
+                    className="whitespace-nowrap"
                   >
                     Generate
                   </Button>
@@ -1119,16 +1265,16 @@ export function GiftsManagement() {
 
       {/* Offer Dialog */}
       <Dialog open={offerDialogOpen} onOpenChange={setOfferDialogOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-2xl mx-4">
           <DialogHeader>
-            <DialogTitle>Submit Offer</DialogTitle>
-            <DialogDescription>
+            <DialogTitle className="text-lg sm:text-xl">Submit Offer</DialogTitle>
+            <DialogDescription className="text-sm">
               Provide pricing and details for the custom gift request
             </DialogDescription>
           </DialogHeader>
           
           <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="proposedPrice">Proposed Price (USD) *</Label>
                 <Input
