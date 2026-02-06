@@ -87,18 +87,44 @@ const Signup = () => {
   useEffect(() => {
     if (username.length < 3) {
       setUsernameAvailable(null);
+      setUsernameSuggestions([]);
       return;
     }
 
     const timer = setTimeout(async () => {
       setCheckingUsername(true);
-      const available = await firestoreService.checkUsernameAvailable(username);
-      setUsernameAvailable(available);
-      setCheckingUsername(false);
+      try {
+        console.log('Checking username:', username);
+        const available = await firestoreService.checkUsernameAvailable(username);
+        console.log('Username check result:', available);
+        setUsernameAvailable(available);
+        
+        // If username is not available, generate suggestions
+        if (!available && email) {
+          const suggestions = firestoreService.generateUsernameSuggestions(email);
+          setUsernameSuggestions(suggestions);
+        } else {
+          setUsernameSuggestions([]);
+        }
+      } catch (error: any) {
+        console.error('Username check failed:', error);
+        
+        // Handle permission errors gracefully
+        if (error?.code === 'permission-denied' || error?.message?.includes('permission')) {
+          console.log('Permission denied - allowing signup to proceed with server-side validation');
+          setUsernameAvailable(true); // Allow signup to proceed
+          toast.info('Username will be verified during account creation.');
+        } else {
+          setUsernameAvailable(false); // Assume not available on other errors
+          toast.error('Failed to check username availability. Please try again.');
+        }
+      } finally {
+        setCheckingUsername(false);
+      }
     }, 500);
 
     return () => clearTimeout(timer);
-  }, [username]);
+  }, [username, email]);
 
   // Username suggestions from email
   useEffect(() => {
@@ -144,7 +170,18 @@ const Signup = () => {
       );
 
       if (error) {
-        toast.error(error);
+        // Check if it's a username conflict error
+        if (error.includes('username') || error.includes('Username')) {
+          toast.error('Username is already taken. Please choose a different one.');
+          setUsernameAvailable(false);
+          // Generate new suggestions
+          if (email) {
+            const suggestions = firestoreService.generateUsernameSuggestions(email);
+            setUsernameSuggestions(suggestions);
+          }
+        } else {
+          toast.error(error);
+        }
       } else if (user) {
         if (referralCode.trim()) {
           try {
@@ -331,12 +368,70 @@ const Signup = () => {
                   )}
                 </div>
               </div>
+              {username.length >= 3 && usernameAvailable === null && !checkingUsername && (
+                <div className="flex items-center gap-2">
+                  <p className="text-xs text-muted-foreground">
+                    Unable to verify username
+                  </p>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      setCheckingUsername(true);
+                      try {
+                        const available = await firestoreService.checkUsernameAvailable(username);
+                        setUsernameAvailable(available);
+                        if (!available && email) {
+                          const suggestions = firestoreService.generateUsernameSuggestions(email);
+                          setUsernameSuggestions(suggestions);
+                        }
+                      } catch (error: any) {
+                        console.error('Manual username check failed:', error);
+                        if (error?.code === 'permission-denied' || error?.message?.includes('permission')) {
+                          setUsernameAvailable(true);
+                          toast.info('Username will be verified during account creation.');
+                        } else {
+                          toast.error('Failed to check username. Please try a different one.');
+                        }
+                      } finally {
+                        setCheckingUsername(false);
+                      }
+                    }}
+                    className="text-xs text-primary hover:underline"
+                  >
+                    Retry
+                  </button>
+                </div>
+              )}
               {usernameAvailable === false && (
-                <p className="text-xs text-destructive">
-                  Username is already taken
+                <div className="space-y-2">
+                  <p className="text-xs text-destructive">
+                    Username is already taken
+                  </p>
+                  {usernameSuggestions.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      <span className="text-xs text-muted-foreground">
+                        Try these:
+                      </span>
+                      {usernameSuggestions.slice(0, 3).map((suggestion) => (
+                        <button
+                          key={suggestion}
+                          type="button"
+                          onClick={() => setUsername(suggestion)}
+                          className="text-xs bg-primary/10 text-primary hover:bg-primary/20 px-2 py-1 rounded transition-colors"
+                        >
+                          {suggestion}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+              {usernameAvailable === true && (
+                <p className="text-xs text-green-600">
+                  ✓ Username is available
                 </p>
               )}
-              {usernameSuggestions.length > 0 && !username && (
+              {usernameSuggestions.length > 0 && !username && email && (
                 <div className="flex flex-wrap gap-2 mt-2">
                   <span className="text-xs text-muted-foreground">
                     Suggestions:
@@ -435,11 +530,17 @@ const Signup = () => {
             <Button
               type="submit"
               className="w-full"
-              disabled={loading || usernameAvailable === false}
+              disabled={loading || (usernameAvailable === false)}
             >
               {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Create Account
             </Button>
+            
+            {username.length >= 3 && usernameAvailable === null && !checkingUsername && (
+              <p className="text-xs text-amber-600 text-center">
+                ⚠️ Username verification failed. You can still create an account, but the username might be taken.
+              </p>
+            )}
           </form>
 
           <div className="text-center text-sm text-muted-foreground">

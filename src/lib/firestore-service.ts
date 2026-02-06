@@ -277,10 +277,30 @@ export const firestoreService = {
 
   // ===== USERNAME FUNCTIONS =====
   async checkUsernameAvailable(username: string): Promise<boolean> {
-    const colRef = collection(db, "users");
-    const q = query(colRef, where("username", "==", username.toLowerCase()));
-    const snapshot = await getDocs(q);
-    return snapshot.empty;
+    try {
+      console.log('Checking username availability for:', username);
+      
+      // Check the usernames collection (public readable)
+      const usernameDocRef = doc(db, "usernames", username.toLowerCase());
+      const usernameDoc = await getDoc(usernameDocRef);
+      
+      // If document exists, username is taken
+      const isAvailable = !usernameDoc.exists();
+      console.log('Username availability result:', isAvailable);
+      return isAvailable;
+    } catch (error: any) {
+      console.error('Error checking username availability:', error);
+      
+      // If it's a permission error, we can't verify the username
+      if (error?.code === 'permission-denied' || error?.message?.includes('permission')) {
+        console.log('Permission denied for username check - allowing signup to proceed');
+        // Return true to allow signup to proceed (username will be validated server-side)
+        return true;
+      }
+      
+      // For other errors, assume username is taken to be safe
+      return false;
+    }
   },
 
   async setUsername(userId: string, username: string): Promise<{ success: boolean; error?: string }> {
@@ -289,6 +309,13 @@ export const firestoreService = {
       return { success: false, error: "Username is already taken" };
     }
     
+    // Reserve username in usernames collection
+    await setDoc(doc(db, "usernames", username.toLowerCase()), {
+      userId: userId,
+      createdAt: serverTimestamp()
+    });
+    
+    // Update user profile
     await this.updateUserProfile(userId, { username: username.toLowerCase() });
     return { success: true };
   },

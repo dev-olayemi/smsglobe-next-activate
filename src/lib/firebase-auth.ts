@@ -19,39 +19,78 @@ export const firebaseAuthService = {
   // Email/Password Sign Up
   async signUp(email: string, password: string, username?: string, recaptchaToken?: string) {
     try {
+      console.log('Starting signup process for:', email);
+      
       // Check username availability if provided
       if (username) {
-        const usernameQuery = query(
-          collection(db, "users"),
-          where("username", "==", username.toLowerCase())
-        );
-        const usernameSnapshot = await getDocs(usernameQuery);
-        if (!usernameSnapshot.empty) {
+        console.log('Checking username availability:', username);
+        // Check the usernames collection (public readable)
+        const usernameDocRef = doc(db, "usernames", username.toLowerCase());
+        const usernameDoc = await getDoc(usernameDocRef);
+        if (usernameDoc.exists()) {
+          console.log('Username already taken:', username);
           return { user: null, error: "Username is already taken" };
         }
       }
 
+      console.log('Creating Firebase Auth user...');
       const userCredential = await createUserWithEmailAndPassword(firebaseAuth, email, password);
       const user = userCredential.user;
+      console.log('Firebase Auth user created:', user.uid);
       
-      // Create user profile in Firestore
-      await setDoc(doc(db, "users", user.uid), {
-        email: user.email,
-        username: username?.toLowerCase() || null,
-        balance: 0,
-        cashback: 0,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-        useCashbackFirst: true,
-        referralCode: generateReferralCode(),
-        referredBy: null,
-        referralCount: 0,
-        referralEarnings: 0
-      });
-      
-      return { user, error: null };
+      try {
+        // Reserve username in usernames collection if provided
+        if (username) {
+          console.log('Reserving username:', username);
+          await setDoc(doc(db, "usernames", username.toLowerCase()), {
+            userId: user.uid,
+            createdAt: serverTimestamp()
+          });
+          console.log('Username reserved successfully');
+        }
+        
+        // Create user profile in Firestore
+        console.log('Creating user profile in Firestore...');
+        await setDoc(doc(db, "users", user.uid), {
+          email: user.email,
+          username: username?.toLowerCase() || null,
+          balance: 0,
+          cashback: 0,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+          useCashbackFirst: true,
+          referralCode: generateReferralCode(),
+          referredBy: null,
+          referralCount: 0,
+          referralEarnings: 0
+        });
+        console.log('User profile created successfully');
+        
+        return { user, error: null };
+      } catch (firestoreError: any) {
+        console.error('Firestore error during signup:', firestoreError);
+        // If Firestore operations fail, we should still return the user
+        // The profile can be created later
+        return { 
+          user, 
+          error: `Account created but profile setup incomplete: ${firestoreError.message}` 
+        };
+      }
     } catch (error: any) {
-      return { user: null, error: error.message };
+      console.error('Firebase Auth error during signup:', error);
+      
+      // Handle specific Firebase Auth errors
+      if (error.code === 'auth/email-already-in-use') {
+        return { user: null, error: "An account with this email already exists" };
+      } else if (error.code === 'auth/weak-password') {
+        return { user: null, error: "Password should be at least 6 characters" };
+      } else if (error.code === 'auth/invalid-email') {
+        return { user: null, error: "Invalid email address" };
+      } else if (error.code === 'auth/operation-not-allowed') {
+        return { user: null, error: "Email/password accounts are not enabled" };
+      } else {
+        return { user: null, error: error.message || "Failed to create account" };
+      }
     }
   },
 
