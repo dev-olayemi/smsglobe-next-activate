@@ -17,6 +17,8 @@ import { Loader2, Check, X, Eye, EyeOff } from "lucide-react";
 import logo from "@/assets/logo.png";
 import { z } from "zod";
 import ReCAPTCHA from "react-google-recaptcha";
+import { isProductionEnvironment, shouldUseRecaptcha, logDomainInfo } from "@/lib/domain-utils";
+import "@/lib/auth-test"; // Auto-run auth tests in development
 
 const signupSchema = z.object({
   email: z.string().email("Invalid email address"),
@@ -36,17 +38,13 @@ const signupSchema = z.object({
 
 const PRODUCTION_DOMAINS = [
   "smsglobe.net",
+  "app.smsglobe.net", 
   "smsglobe-test.vercel.app",
+  "deemax-3223e.firebaseapp.com"
 ];
 
 const isProduction = () => {
-  if (typeof window === "undefined") return false;
-  const hostname = window.location.hostname;
-  const protocol = window.location.protocol;
-  return (
-    PRODUCTION_DOMAINS.includes(hostname) ||
-    (hostname.endsWith(".vercel.app") && protocol === "https:")
-  );
+  return isProductionEnvironment();
 };
 
 const Signup = () => {
@@ -71,6 +69,9 @@ const Signup = () => {
   const siteKey = import.meta.env.VITE_PUBLIC_RECAPTCHA_SITE_KEY;
 
   useEffect(() => {
+    // Log domain info for debugging
+    logDomainInfo();
+    
     const user = firebaseAuthService.getCurrentUser();
     if (user) {
       navigate("/dashboard");
@@ -147,17 +148,23 @@ const Signup = () => {
 
       // reCAPTCHA check in production
       let recaptchaToken = "";
-      if (isProduction() && siteKey) {
-        if (!recaptchaRef.current) {
-          toast.error("reCAPTCHA not loaded");
-          return;
+      if (shouldUseRecaptcha()) {
+        try {
+          if (!recaptchaRef.current) {
+            console.warn("reCAPTCHA not loaded, proceeding without verification");
+            // Don't block signup if reCAPTCHA fails to load
+          } else {
+            recaptchaToken = await recaptchaRef.current.executeAsync() || "";
+            if (!recaptchaToken) {
+              console.warn("reCAPTCHA token empty, proceeding without verification");
+            }
+            recaptchaRef.current.reset();
+          }
+        } catch (recaptchaError) {
+          console.error('reCAPTCHA error:', recaptchaError);
+          // Don't block signup if reCAPTCHA fails
+          console.warn("reCAPTCHA verification failed, proceeding without verification");
         }
-        recaptchaToken = await recaptchaRef.current.executeAsync() || "";
-        if (!recaptchaToken) {
-          toast.error("Please complete the reCAPTCHA");
-          return;
-        }
-        recaptchaRef.current.reset();
       }
 
       setLoading(true);
@@ -179,8 +186,19 @@ const Signup = () => {
             const suggestions = firestoreService.generateUsernameSuggestions(email);
             setUsernameSuggestions(suggestions);
           }
+        } else if (error.includes('email-already-in-use') || error.includes('already exists')) {
+          toast.error('An account with this email already exists. Please sign in instead.');
+        } else if (error.includes('weak-password')) {
+          toast.error('Password should be at least 6 characters long.');
+        } else if (error.includes('invalid-email')) {
+          toast.error('Please enter a valid email address.');
+        } else if (error.includes('operation-not-allowed')) {
+          toast.error('Email/password accounts are not enabled. Please contact support.');
+        } else if (error.includes('network-request-failed')) {
+          toast.error('Network error. Please check your internet connection and try again.');
         } else {
-          toast.error(error);
+          console.error('Signup error:', error);
+          toast.error('Failed to create account. Please try again or contact support if the issue persists.');
         }
       } else if (user) {
         if (referralCode.trim()) {
@@ -517,7 +535,7 @@ const Signup = () => {
             </div>
 
             {/* reCAPTCHA - only in production */}
-            {isProduction() && siteKey && (
+            {shouldUseRecaptcha() && (
               <div className="flex justify-center">
                 <ReCAPTCHA
                   ref={recaptchaRef}

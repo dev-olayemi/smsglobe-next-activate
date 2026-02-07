@@ -149,11 +149,42 @@ export const firebaseAuthService = {
       
       return { user, error: null };
     } catch (error: any) {
-      try {
-        await signInWithRedirect(firebaseAuth, googleProvider);
-        return { user: null, error: null };
-      } catch (err: any) {
-        return { user: null, error: (err && err.message) || error?.message || 'Google sign-in failed' };
+      console.error('Google sign-in error:', error);
+      
+      // Handle specific Google auth errors
+      if (error.code === 'auth/unauthorized-domain') {
+        return { 
+          user: null, 
+          error: 'This domain is not authorized for Google sign-in. Please contact support or try email/password signup.' 
+        };
+      } else if (error.code === 'auth/popup-blocked') {
+        // Try redirect as fallback
+        try {
+          await signInWithRedirect(firebaseAuth, googleProvider);
+          return { user: null, error: null };
+        } catch (redirectError: any) {
+          console.error('Google redirect error:', redirectError);
+          return { 
+            user: null, 
+            error: 'Google sign-in was blocked. Please allow popups or try email/password signup.' 
+          };
+        }
+      } else if (error.code === 'auth/popup-closed-by-user') {
+        return { user: null, error: 'Sign-in was cancelled. Please try again.' };
+      } else if (error.code === 'auth/network-request-failed') {
+        return { user: null, error: 'Network error. Please check your connection and try again.' };
+      } else {
+        // Try redirect as fallback for other errors
+        try {
+          await signInWithRedirect(firebaseAuth, googleProvider);
+          return { user: null, error: null };
+        } catch (redirectError: any) {
+          console.error('Google redirect fallback error:', redirectError);
+          return { 
+            user: null, 
+            error: error.message || 'Google sign-in failed. Please try email/password signup.' 
+          };
+        }
       }
     }
   },
