@@ -144,6 +144,17 @@ export const SMSGlobe: React.FC = () => {
         }));
 
         setServices(normalized);
+
+        // Check provider balance
+        try {
+          const providerBalance = await tellabotApi.getBalance();
+          console.log('💰 Provider balance:', providerBalance);
+          if (providerBalance < 1) {
+            setError(`⚠️ Service provider account low on balance ($${providerBalance.toFixed(2)}). Service may be unavailable.`);
+          }
+        } catch (balanceErr) {
+          console.warn('Could not check provider balance:', balanceErr);
+        }
       } catch (err: any) {
         const msg = err.message || "Unknown error";
         setError(
@@ -262,6 +273,13 @@ export const SMSGlobe: React.FC = () => {
 
     const finalCost = usePriority && customMarkup ? totalCost + (customMarkup / 100) : totalCost;
 
+    console.log('🔍 Balance Check (One-Time):', {
+      userBalance: profile.balance,
+      estimatedCost: finalCost,
+      selectedServices,
+      hasEnoughBalance: profile.balance >= finalCost
+    });
+
     // Check balance
     if (profile.balance < finalCost) {
       toast.error(
@@ -269,6 +287,8 @@ export const SMSGlobe: React.FC = () => {
       );
       return;
     }
+
+    console.log('✅ Balance check passed, proceeding with order...');
 
     try {
       setLoading(true);
@@ -311,7 +331,17 @@ export const SMSGlobe: React.FC = () => {
       setAreaCode("");
       loadActiveRequests();
     } catch (err: any) {
-      toast.error(err.message || "Order failed");
+      const errorMessage = err.message || "Order failed";
+      console.error('❌ Order error:', errorMessage);
+      
+      // Better error messages
+      if (errorMessage.toLowerCase().includes('low balance') || errorMessage.toLowerCase().includes('insufficient')) {
+        toast.error("Provider account has insufficient balance. Please contact support.");
+      } else if (errorMessage.toLowerCase().includes('no numbers available')) {
+        toast.error("No SMS numbers are currently available. Please try again in a few minutes.");
+      } else {
+        toast.error(errorMessage);
+      }
     } finally {
       setLoading(false);
     }
@@ -335,6 +365,29 @@ export const SMSGlobe: React.FC = () => {
       return;
     }
 
+    // Verify rental service data is available
+    if (!rentalServiceData) {
+      toast.error("Service data not loaded. Please try again.");
+      console.error('❌ Rental service data not found for:', rentalService);
+      return;
+    }
+
+    // Verify pricing is available
+    if (rentalPrice === 0) {
+      toast.error("Service pricing not available. Please try again.");
+      console.error('❌ Rental price is 0 for service:', rentalService, 'duration:', rentalDuration);
+      return;
+    }
+
+    console.log('🔍 Balance Check:', {
+      userBalance: profile.balance,
+      rentalService,
+      rentalDuration,
+      rentalServiceData,
+      rentalPrice,
+      hasEnoughBalance: profile.balance >= rentalPrice
+    });
+
     // Check balance
     if (profile.balance < rentalPrice) {
       toast.error(
@@ -342,6 +395,8 @@ export const SMSGlobe: React.FC = () => {
       );
       return;
     }
+
+    console.log('✅ Balance check passed, proceeding with rental order...');
 
     try {
       setLoading(true);
@@ -360,7 +415,17 @@ export const SMSGlobe: React.FC = () => {
       setRentalState("");
       setRentalAreaCode("");
     } catch (err: any) {
-      toast.error(err.message || "Rental failed");
+      const errorMessage = err.message || "Rental failed";
+      console.error('❌ Rental error:', errorMessage);
+      
+      // Better error messages
+      if (errorMessage.toLowerCase().includes('low balance') || errorMessage.toLowerCase().includes('insufficient')) {
+        toast.error("Provider account has insufficient balance. Please contact support.");
+      } else if (errorMessage.toLowerCase().includes('no numbers available')) {
+        toast.error("No SMS numbers are currently available. Please try again in a few minutes.");
+      } else {
+        toast.error(errorMessage);
+      }
     } finally {
       setLoading(false);
     }
