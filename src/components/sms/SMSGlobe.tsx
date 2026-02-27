@@ -104,7 +104,7 @@ interface ActiveRequest {
 }
 
 export const SMSGlobe: React.FC = () => {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -247,6 +247,29 @@ export const SMSGlobe: React.FC = () => {
       return;
     }
 
+    // Check user balance before making purchase
+    if (!profile) {
+      toast.error("User profile not found. Please refresh and try again.");
+      return;
+    }
+
+    // Calculate total cost
+    const totalCost = selectedServices.reduce((sum, name) => {
+      const svc = services.find((s) => s.name === name);
+      const basePrice = svc?.price || 0;
+      return sum + basePrice;
+    }, 0);
+
+    const finalCost = usePriority && customMarkup ? totalCost + (customMarkup / 100) : totalCost;
+
+    // Check balance
+    if (profile.balance < finalCost) {
+      toast.error(
+        `Insufficient balance. Required: $${finalCost.toFixed(2)}, Available: $${profile.balance.toFixed(2)}. Please top up your account.`
+      );
+      return;
+    }
+
     try {
       setLoading(true);
       const markup = usePriority ? (customMarkup || 0) : undefined;
@@ -294,6 +317,7 @@ export const SMSGlobe: React.FC = () => {
     }
   };
 
+  // Calculate rental price for display and purchase
   const rentalServiceData = services.find((s) => s.name === rentalService);
   const rentalPrice = rentalDuration === 3
     ? rentalServiceData?.ltr_short_price || 0
@@ -302,6 +326,20 @@ export const SMSGlobe: React.FC = () => {
   const handleRentalOrder = async () => {
     if (!user || !rentalService) {
       toast.error("Select a service");
+      return;
+    }
+
+    // Check user balance before making purchase
+    if (!profile) {
+      toast.error("User profile not found. Please refresh and try again.");
+      return;
+    }
+
+    // Check balance
+    if (profile.balance < rentalPrice) {
+      toast.error(
+        `Insufficient balance. Required: $${rentalPrice.toFixed(2)}, Available: $${profile.balance.toFixed(2)}. Please top up your account.`
+      );
       return;
     }
 
@@ -492,6 +530,34 @@ export const SMSGlobe: React.FC = () => {
                     </Alert>
                   )}
 
+                  {/* Balance Check Section */}
+                  <div className="mb-6 p-4 border rounded-lg bg-gradient-to-r from-blue-50 to-transparent">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="font-medium text-gray-700">Your Balance</p>
+                        <p className="text-2xl font-bold text-green-600">
+                          ${profile?.balance?.toFixed(2) || "0.00"}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm text-gray-600">Cost</p>
+                        <p className={`text-2xl font-bold ${
+                          profile && profile.balance >= oneTimeFinalPrice ? 'text-green-600' : 'text-red-600'
+                        }`}>
+                          ${oneTimeFinalPrice.toFixed(2)}
+                        </p>
+                      </div>
+                    </div>
+                    {profile && profile.balance < oneTimeFinalPrice && (
+                      <Alert variant="destructive" className="mt-4">
+                        <AlertCircle className="h-5 w-5" />
+                        <AlertDescription>
+                          Insufficient balance. Need ${(oneTimeFinalPrice - profile.balance).toFixed(2)} more.
+                        </AlertDescription>
+                      </Alert>
+                    )}
+                  </div>
+
                   <div className="mb-6">
                     <div className="flex items-center justify-between">
                       <div>
@@ -641,6 +707,34 @@ export const SMSGlobe: React.FC = () => {
                         {rentalDuration === 3 ? "3 days" : "30 days"}
                       </p>
                     </div>
+                  </div>
+
+                  {/* Balance Check Section for Rental */}
+                  <div className="mb-6 p-4 border rounded-lg bg-white">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="font-medium text-gray-700">Your Balance</p>
+                        <p className="text-2xl font-bold text-green-600">
+                          ${profile?.balance?.toFixed(2) || "0.00"}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm text-gray-600">Rental Cost</p>
+                        <p className={`text-2xl font-bold ${
+                          profile && profile.balance >= rentalPrice ? 'text-green-600' : 'text-red-600'
+                        }`}>
+                          ${rentalPrice.toFixed(2)}
+                        </p>
+                      </div>
+                    </div>
+                    {profile && profile.balance < rentalPrice && (
+                      <Alert variant="destructive" className="mt-4">
+                        <AlertCircle className="h-5 w-5" />
+                        <AlertDescription>
+                          Insufficient balance. Need ${(rentalPrice - profile.balance).toFixed(2)} more.
+                        </AlertDescription>
+                      </Alert>
+                    )}
                   </div>
 
                   <Button size="lg" className="w-full text-lg py-6" onClick={handleRentalOrder} disabled={loading}>
